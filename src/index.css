@@ -1,3 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bg text-white font-sans;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  h1 {
+    @apply text-h1 font-semibold;
+  }
+
+  h2 {
+    @apply text-h2 font-semibold;
+  }
+
+  * {
+    @apply border-gray-700;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-card rounded-lg shadow-md;
+  }
+
+  .btn-primary {
+    @apply bg-accent hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-md transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-card hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-md transition-colors border border-gray-600;
+  }
+
+  .btn-danger {
+    @apply bg-danger hover:bg-red-600 text-white font-medium px-4 py-2 rounded-md transition-colors;
+  }
+
+  .input-field {
+    @apply bg-card border border-gray-600 rounded-md px-4 py-2 text-white placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply bg-success/10 text-success border border-success/20;
+  }
+
+  .badge-warning {
+    @apply bg-warning/10 text-warning border border-warning/20;
+  }
+
+  .badge-danger {
+    @apply bg-danger/10 text-danger border border-danger/20;
+  }
+
+  .badge-muted {
+    @apply bg-gray-700 text-muted border border-gray-600;
+  }
+}
