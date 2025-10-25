@@ -90,21 +90,25 @@ router.post('/webhooks/veo', async (req, res) => {
           variantId: run.variant_id,
         });
 
-        // Just update the variant with video URL
-        await updateVariantWithVideo(run.variant_id, videoUrl, run.engine);
+        // Just update the variant with video URL (preview)
+        await updateVariantWithVideo(run.variant_id, videoUrl, true);
 
         return res.json({
           success: true,
-          message: 'Video URL updated, QA skipped (no plan)',
+          message: 'Preview video URL updated, QA skipped (no plan)',
         });
       }
+
+      // Determine if this is a preview or final render
+      const isPreview = run.engine === 'veo_fast' && run.cost_seconds === 9;
 
       // Extract expected overlays from plan
       const allOverlays: Overlay[] = plan.beats.flatMap((beat) => beat.overlays);
       const expectedOverlays = extractExpectedOverlays(allOverlays);
 
-      logger.info('Running OCR QA', {
+      logger.info('Running OCR QA for preview', {
         runId,
+        isPreview,
         overlayCount: expectedOverlays.length,
       });
 
@@ -121,9 +125,9 @@ router.post('/webhooks/veo', async (req, res) => {
 
       let finalVideoUrl = videoUrl;
 
-      // If QA failed, burn in overlays
+      // If QA failed, burn in overlays to guarantee text presence
       if (!qaResult.ok && qaResult.needsBurnIn) {
-        logger.warn('QA failed, burning in overlays', {
+        logger.warn('QA failed, burning in overlays for preview', {
           runId,
           missingOverlays: qaResult.missingOverlays,
         });
@@ -131,7 +135,7 @@ router.post('/webhooks/veo', async (req, res) => {
         try {
           const outputPath = path.join(
             '/tmp',
-            `${runId}_burned_${Date.now()}.mp4`
+            `${runId}_preview_burned_${Date.now()}.mp4`
           );
 
           const logoPngUrl = plan.brand.logoUrl;
@@ -144,30 +148,37 @@ router.post('/webhooks/veo', async (req, res) => {
           );
 
           if (burnResult.success && burnResult.outputPath) {
-            logger.info('Overlay burn-in successful', {
+            logger.info('Preview overlay burn-in successful', {
               runId,
               outputPath: burnResult.outputPath,
               duration: burnResult.duration,
             });
 
-            // TODO: Upload burned video to storage and get public URL
-            // For now, use the local path
-            finalVideoUrl = burnResult.outputPath;
+            // TODO: Upload burned video to Supabase Storage and get public URL
+            // For now, use a mock URL pattern
+            finalVideoUrl = `https://storage.example.com/previews/${runId}_burned.mp4`;
 
-            // Store QA failure in run response
+            logger.info('Burned preview video would be uploaded to storage', {
+              runId,
+              localPath: burnResult.outputPath,
+              publicUrl: finalVideoUrl,
+            });
+
+            // Store QA failure and burn-in metadata
             await supabase
               .from('runs')
               .update({
                 response_json: {
                   videoUrl,
                   burnedVideoUrl: finalVideoUrl,
+                  localBurnedPath: burnResult.outputPath,
                   qaResult,
                   burnedAt: new Date().toISOString(),
                 },
               })
               .eq('id', runId);
           } else {
-            logger.error('Overlay burn-in failed', {
+            logger.error('Preview overlay burn-in failed', {
               runId,
               error: burnResult.error,
             });
@@ -192,9 +203,24 @@ router.post('/webhooks/veo', async (req, res) => {
           });
 
           // Continue with original video
+          await supabase
+            .from('runs')
+            .update({
+              response_json: {
+                videoUrl,
+                qaResult,
+                burnInException: String(burnError),
+              },
+            })
+            .eq('id', runId);
         }
       } else {
         // QA passed, store result
+        logger.info('QA passed, no burn-in needed', {
+          runId,
+          confidence: qaResult.confidence,
+        });
+
         await supabase
           .from('runs')
           .update({
@@ -206,14 +232,15 @@ router.post('/webhooks/veo', async (req, res) => {
           .eq('id', runId);
       }
 
-      // Update variant with final video URL
-      await updateVariantWithVideo(run.variant_id, finalVideoUrl, run.engine);
+      // Update variant with final video URL (preview_url for previews)
+      await updateVariantWithVideo(run.variant_id, finalVideoUrl, isPreview);
 
-      logger.info('Webhook processing complete', {
+      logger.info('Webhook processing complete for preview', {
         runId,
         variantId: run.variant_id,
         finalVideoUrl,
         qaOk: qaResult.ok,
+        burnedIn: !qaResult.ok,
       });
 
       return res.json({
@@ -225,6 +252,7 @@ router.post('/webhooks/veo', async (req, res) => {
         },
         videoUrl: finalVideoUrl,
         burnedIn: !qaResult.ok,
+        message: 'Preview video processed with QA and burn-in fallback',
       });
     }
 
@@ -250,23 +278,24 @@ router.post('/webhooks/veo', async (req, res) => {
 async function updateVariantWithVideo(
   variantId: string,
   videoUrl: string,
-  engine: string
+  isPreview: boolean = true
 ): Promise<void> {
-  // Determine which field to update based on engine/type
-  // For simplicity, assuming 'veo_fast' is preview, others are final
-  const updateField = engine === 'veo_fast' ? { video_url: videoUrl } : { video_url: videoUrl };
+  // Previews use video_url, finals use video_url (same field for now)
+  // In future, could add separate preview_url field
+  const updateData: any = {
+    video_url: videoUrl,
+    status: 'done',
+  };
 
   await supabase
     .from('variants')
-    .update({
-      ...updateField,
-      status: 'done',
-    })
+    .update(updateData)
     .eq('id', variantId);
 
   logger.info('Variant updated with video URL', {
     variantId,
     videoUrl,
+    isPreview,
   });
 }
 

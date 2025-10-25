@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
 import { Plan } from '../../../packages/shared/src/plan';
+import { createVEO3Client } from '../lib/veo3-client';
 
 const router = Router();
 const logger = new Logger({ module: 'render-route' });
@@ -36,6 +37,7 @@ router.post('/api/render/previews', async (req, res) => {
     }
 
     const runs: any[] = [];
+    const veo3Client = createVEO3Client('veo_fast');
 
     for (const variant of variants) {
       if (!variant.script_json) {
@@ -46,10 +48,10 @@ router.post('/api/render/previews', async (req, res) => {
       const plan = variant.script_json as Plan;
 
       // Compile prompt
-      const compiled = compilePreviewPrompt(plan);
+      const { system, user, control } = compilePreviewPrompt(plan);
 
       // Validate compiled prompt
-      const validation = validateCompiledPrompt(compiled);
+      const validation = validateCompiledPrompt({ system, user, control });
       if (!validation.valid) {
         logger.error('Compiled prompt validation failed', {
           variantId: variant.id,
@@ -58,7 +60,7 @@ router.post('/api/render/previews', async (req, res) => {
         continue;
       }
 
-      // Create run record
+      // Create run record first to get runId for webhook
       const { data: run, error: runError } = await supabase
         .from('runs')
         .insert({
@@ -67,32 +69,96 @@ router.post('/api/render/previews', async (req, res) => {
           state: 'queued',
           veo_model: 'veo_fast',
           beat_duration: 6,
-          request_json: compiled.control,
-          cost_seconds: plan.targetDuration,
+          request_json: control,
+          cost_seconds: 9,
         })
         .select()
         .maybeSingle();
 
-      if (runError) {
+      if (runError || !run) {
         logger.error('Failed to create run', { variantId: variant.id, error: runError });
         continue;
       }
 
-      runs.push(run);
+      // Build webhook URL with runId
+      const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 8787}`;
+      const webhookUrl = `${baseUrl}/webhooks/veo?runId=${run.id}`;
 
-      // Update variant status
-      await supabase
-        .from('variants')
-        .update({ status: 'previewing' })
-        .eq('id', variant.id);
+      // Get seed from plan or use variant seed
+      const seed = plan.beats[0]?.seed || variant.seed || 341991;
 
-      logger.info('Preview render queued', {
+      // Get first beat's assets for the 9s preview
+      const firstBeat = plan.beats[0];
+      const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
+
+      logger.info('Calling VEO3 Fast', {
+        runId: run.id,
         variantId: variant.id,
-        runId: run?.id,
+        seed,
+        webhookUrl,
+        imageCount: referenceImages.length,
       });
+
+      // Call VEO3 Fast API
+      try {
+        // Update run to running state
+        await supabase
+          .from('runs')
+          .update({ state: 'running' })
+          .eq('id', run.id);
+
+        const veoResult = await veo3Client.generateVideo({
+          prompt: `${system}\n\n${user}`,
+          duration: 9,
+          aspectRatio: '9:16',
+          referenceImages,
+          includeAudio: false,
+        });
+
+        logger.info('VEO3 Fast called successfully', {
+          runId: run.id,
+          jobId: veoResult.jobId,
+          status: veoResult.status,
+        });
+
+        // Store VEO3 job ID
+        await supabase
+          .from('runs')
+          .update({
+            response_json: { veoJobId: veoResult.jobId, webhookUrl },
+          })
+          .eq('id', run.id);
+
+        runs.push(run);
+
+        // Update variant status
+        await supabase
+          .from('variants')
+          .update({ status: 'previewing' })
+          .eq('id', variant.id);
+
+      } catch (veoError) {
+        logger.error('VEO3 API call failed', {
+          runId: run.id,
+          error: veoError,
+        });
+
+        await supabase
+          .from('runs')
+          .update({
+            state: 'failed',
+            error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+          })
+          .eq('id', run.id);
+
+        await supabase
+          .from('variants')
+          .update({ status: 'error' })
+          .eq('id', variant.id);
+      }
     }
 
-    logger.info('Preview renders queued', {
+    logger.info('Preview renders initiated', {
       projectId,
       runCount: runs.length,
     });
@@ -105,7 +171,7 @@ router.post('/api/render/previews', async (req, res) => {
         engine: r.engine,
         state: r.state,
       })),
-      message: 'Preview renders queued. In production, VEO3 API would be called here.',
+      message: `${runs.length} preview renders initiated with VEO3 Fast`,
     });
   } catch (error) {
     logger.error('Preview render error', { error });
