@@ -84,6 +84,16 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
                   Create
                 </Link>
                 <Link
+                  to="/prompt"
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    location.pathname === '/prompt'
+                      ? 'bg-slate-800 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  }`}
+                >
+                  Prompt
+                </Link>
+                <Link
                   to="/library"
                   className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                     location.pathname === '/library'

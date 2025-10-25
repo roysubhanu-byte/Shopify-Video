@@ -56,3 +56,79 @@ export interface JobStatusResponse {
   variants: VariantRender[];
   error?: string;
 }
+
+export interface ScriptBeat {
+  text: string;
+  duration: number;
+}
+
+export interface Overlay {
+  text: string;
+  timestamp: number;
+}
+
+export interface PromptPlanRequest {
+  freeText: string;
+  aspect?: '9:16' | '1:1' | '16:9';
+  duration?: number;
+  tone?: 'casual' | 'professional' | 'energetic' | 'calm';
+}
+
+export interface PromptPlanResponse {
+  promptId: string;
+  hook: string;
+  scriptBeats: ScriptBeat[];
+  overlays: Overlay[];
+  voiceId: string;
+  estimatedDuration: number;
+}
+
+export interface PromptRenderRequest {
+  promptId: string;
+  mode: 'preview' | 'final';
+  idempotencyKey: string;
+}
+
+export interface PromptRenderResponse {
+  runId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  error?: string;
+}
+
+export interface PromptJobStatusResponse {
+  runId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  srtUrl?: string;
+  error?: string;
+}
+
+export interface CustomPrompt {
+  id: string;
+  userId: string;
+  title: string;
+  aspect: '9:16' | '1:1' | '16:9';
+  duration: number;
+  tone: string;
+  hookTemplate: string;
+  scriptBeats: ScriptBeat[];
+  overlays: Overlay[];
+  voiceId: string;
+  seed: number;
+  assetUrls: string[];
+  logoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  category: 'hook' | 'script' | 'overlay';
+  content: string;
+  popularityScore: number;
+  isActive: boolean;
+}

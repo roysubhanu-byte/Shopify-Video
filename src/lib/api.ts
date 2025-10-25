@@ -244,3 +244,113 @@ export async function getJobStatus(runId: string): Promise<JobStatusResponse> {
 
   return response.json();
 }
+
+export async function promptPlan(request: import('../types/api').PromptPlanRequest): Promise<import('../types/api').PromptPlanResponse> {
+  if (USE_MOCK) {
+    await sleep(1000);
+    return {
+      promptId: `prompt_${Date.now()}`,
+      hook: 'Transform your content creation workflow',
+      scriptBeats: [
+        { text: 'Show the current struggle with content creation', duration: 4 },
+        { text: 'Introduce the solution', duration: 3 },
+        { text: 'Demonstrate key benefits', duration: 4 },
+        { text: 'Call to action', duration: 3 },
+      ],
+      overlays: [
+        { text: 'Save Time', timestamp: 5 },
+        { text: 'Create Better', timestamp: 9 },
+      ],
+      voiceId: 'default',
+      estimatedDuration: 14,
+    };
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/prompt/plan`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to generate prompt plan');
+  }
+
+  return response.json();
+}
+
+export async function promptRenderPreview(request: import('../types/api').PromptRenderRequest): Promise<import('../types/api').PromptRenderResponse> {
+  if (USE_MOCK) {
+    await sleep(500);
+    return {
+      runId: `run_prompt_${Date.now()}`,
+      status: 'queued',
+    };
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/prompt/render/preview`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Idempotency-Key': request.idempotencyKey,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to render preview' }));
+    throw new Error(error.message || 'Failed to render preview');
+  }
+
+  return response.json();
+}
+
+export async function promptRenderFinal(request: import('../types/api').PromptRenderRequest): Promise<import('../types/api').PromptRenderResponse> {
+  if (USE_MOCK) {
+    await sleep(500);
+    return {
+      runId: `run_prompt_final_${Date.now()}`,
+      status: 'queued',
+    };
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/prompt/render/final`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Idempotency-Key': request.idempotencyKey,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to render final' }));
+    throw new Error(error.message || 'Failed to render final');
+  }
+
+  return response.json();
+}
+
+export async function getPromptJobStatus(runId: string): Promise<import('../types/api').PromptJobStatusResponse> {
+  if (USE_MOCK) {
+    await sleep(300);
+    return {
+      runId,
+      status: 'succeeded',
+      videoUrl: mockVideoUrls[0],
+      thumbnailUrl: 'https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg',
+    };
+  }
+
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/prompt/jobs/${runId}`, { headers });
+
+  if (!response.ok) {
+    throw new Error('Failed to get prompt job status');
+  }
+
+  return response.json();
+}

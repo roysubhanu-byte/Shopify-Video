@@ -4,6 +4,7 @@ import { LandingPage } from './pages/LandingPage';
 import { SignInPage } from './pages/SignInPage';
 import { SignUpPage } from './pages/SignUpPage';
 import { CreatePage } from './pages/CreatePage';
+import { PromptPage } from './pages/PromptPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { PricingPage } from './pages/PricingPage';
 import { ExamplesPage } from './pages/ExamplesPage';
@@ -17,6 +18,7 @@ function App() {
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="/create" element={<ProtectedRoute><CreatePage /></ProtectedRoute>} />
+        <Route path="/prompt" element={<ProtectedRoute><PromptPage /></ProtectedRoute>} />
         <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/examples" element={<ExamplesPage />} />
