@@ -4,6 +4,7 @@ import { ingestProductURL, validateProductData } from '../lib/ingest';
 import { generateBrandKit } from '../lib/brand-kit';
 import { generate3Concepts } from '../lib/concept-factory';
 import { Logger } from '../lib/logger';
+import { analyzeAndStoreAssets, getProductAssets } from '../lib/asset-analyzer';
 
 const router = Router();
 const logger = new Logger({ module: 'ingest-route' });
@@ -84,11 +85,25 @@ router.post('/api/ingest/url', async (req, res) => {
       logger.error('Failed to store brand kit', kitError);
     }
 
+    let assets = [];
+    if (product?.id && productData.images.length > 0) {
+      try {
+        assets = await analyzeAndStoreAssets(product.id, productData.images);
+        logger.info('Assets analyzed and stored', {
+          productId: product.id,
+          assetCount: assets.length,
+        });
+      } catch (error) {
+        logger.error('Failed to analyze assets', error);
+      }
+    }
+
     logger.info('Ingest complete', {
       userId,
       productId: product?.id,
       brandKitId: kit?.id,
       conceptCount: concepts.length,
+      assetCount: assets.length,
     });
 
     res.json({
@@ -120,6 +135,15 @@ router.post('/api/ingest/url', async (req, res) => {
         script: c.script,
         vertical: c.vertical,
       })),
+      assets: assets.map((a) => ({
+        id: a.id,
+        url: a.asset_url,
+        type: a.asset_type,
+        qualityScore: a.quality_score,
+        width: a.width,
+        height: a.height,
+      })),
+      assetSelectionRequired: assets.length > 0,
     });
   } catch (error) {
     logger.error('Ingest error', error);
