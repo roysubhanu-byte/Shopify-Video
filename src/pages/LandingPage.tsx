@@ -113,8 +113,35 @@ export function LandingPage() {
               </h1>
 
               <p className="text-lg lg:text-xl text-gray-300 mb-8 leading-relaxed">
-                Paste your product URL. Get 3 ready-to-post video ads with hooks, voiceovers, and captions—optimized for TikTok, Reels, and Shorts.
+                Paste your product URL. Get 3 ready-to-post video ads with trending hooks, AI voiceovers, and captions—optimized for TikTok, Reels, and Shorts. Zero assets needed.
               </p>
+
+              <div className="flex flex-wrap gap-3 mb-8">
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="w-5 h-5 bg-yellow-500/20 border border-yellow-500/30 rounded flex items-center justify-center">
+                    <span className="text-yellow-400 text-xs">✓</span>
+                  </div>
+                  <span>Trend-aware hooks</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="w-5 h-5 bg-yellow-500/20 border border-yellow-500/30 rounded flex items-center justify-center">
+                    <span className="text-yellow-400 text-xs">✓</span>
+                  </div>
+                  <span>Auto brand kit</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="w-5 h-5 bg-yellow-500/20 border border-yellow-500/30 rounded flex items-center justify-center">
+                    <span className="text-yellow-400 text-xs">✓</span>
+                  </div>
+                  <span>3 concepts by default</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <div className="w-5 h-5 bg-yellow-500/20 border border-yellow-500/30 rounded flex items-center justify-center">
+                    <span className="text-yellow-400 text-xs">✓</span>
+                  </div>
+                  <span>Hook A/B testing</span>
+                </div>
+              </div>
 
               <form onSubmit={handleGetStarted} className="mb-8">
                 <div className="flex flex-col sm:flex-row gap-3">
