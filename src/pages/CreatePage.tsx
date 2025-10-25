@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { TopNav } from '../components/TopNav';
 import { UrlForm } from '../components/UrlForm';
 import { ConceptTile } from '../components/ConceptTile';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -93,42 +94,21 @@ export function CreatePage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <TopNav />
       <div className="max-w-7xl mx-auto px-6 py-12">
         {variants.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="text-center mb-12 max-w-3xl">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full text-sm text-slate-300 mb-6">
-                <Sparkles size={16} className="text-blue-400" />
-                URL → 3 Reels
-              </div>
-
-              <h1 className="text-6xl font-bold text-white mb-4">
-                Paste a link. Get Reels.{' '}
-                <span className="text-blue-500">Sell more.</span>
+              <h1 className="text-5xl font-bold text-white mb-4">
+                Create Your Video Ads
               </h1>
 
               <p className="text-xl text-slate-400 mb-8">
-                No filming. No editing. No surprises.<br />
-                Your logo, your colors, your story—ready for TikTok, Reels, Shorts.
+                Paste your product URL and get 3 distinct video concepts with trending hooks
               </p>
             </div>
 
             <UrlForm onSubmit={handleUrlSubmit} isLoading={isIngesting || isPlanning} />
-
-            <div className="flex flex-wrap gap-3 mt-8 justify-center">
-              <div className="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-300">
-                No preview fees
-              </div>
-              <div className="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-300">
-                Works with Shopify & WooCommerce
-              </div>
-              <div className="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-300">
-                9:16 export
-              </div>
-              <div className="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-sm text-slate-300">
-                Policy-safe presets
-              </div>
-            </div>
           </div>
         ) : (
           <div>

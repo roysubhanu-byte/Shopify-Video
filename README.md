@@ -1,6 +1,8 @@
-# Shopify Ad Video Engine
+# HOBA - Shopify Ad Video Engine
 
 Generate 3 trend-smart story ads from a product URL - one click from concept to platform-ready videos.
+
+**Paste a link. Get Reels. Sell more.**
 
 ## Features
 
@@ -89,10 +91,14 @@ src/
 
 ## Pages
 
-- **/** - Create 3 Videos (main workflow)
-- **/library** - Video library (coming soon)
-- **/billing** - Pricing and credit packages
-- **/docs** - How it works documentation
+- **/** - Landing page with hero section and value proposition
+- **/signin** - Sign in page
+- **/signup** - Sign up page
+- **/create** - Create 3 Videos (main workflow, requires authentication)
+- **/library** - Video library (requires authentication)
+- **/pricing** - Pricing and credit packages
+- **/examples** - Video examples gallery
+- **/how-it-works** - How it works documentation
 
 ## Scripts
 

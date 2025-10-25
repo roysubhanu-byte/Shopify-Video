@@ -1,8 +1,10 @@
 import { Video } from 'lucide-react';
+import { TopNav } from '../components/TopNav';
 
 export function LibraryPage() {
   return (
     <div className="min-h-screen bg-slate-950">
+      <TopNav />
       <div className="max-w-7xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-white mb-8">Video Library</h1>
 

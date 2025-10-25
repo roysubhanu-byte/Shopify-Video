@@ -1,9 +1,14 @@
 import { CheckCircle2, Video, Sparkles, Zap } from 'lucide-react';
+import { TopNav } from '../components/TopNav';
+import { useStore } from '../store/useStore';
 
 export function DocsPage() {
+  const { isAuthenticated } = useStore();
+
   return (
     <div className="min-h-screen bg-slate-950">
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <TopNav variant={isAuthenticated ? 'default' : 'landing'} />
+      <div className="max-w-4xl mx-auto px-6 py-20 pt-32">
         <h1 className="text-4xl font-bold text-white mb-4">
           How It Works
         </h1>

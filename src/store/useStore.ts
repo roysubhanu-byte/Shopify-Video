@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { IngestResponse, VariantPlan, VariantRender } from '../types/api';
 
 interface StoreState {
+  isAuthenticated: boolean;
   credits: number;
   productUrl: string;
   projectId: string | null;
@@ -10,6 +11,7 @@ interface StoreState {
   renders: Map<string, VariantRender>;
   currentRunId: string | null;
 
+  setAuthenticated: (isAuth: boolean) => void;
   setProductUrl: (url: string) => void;
   setProjectData: (data: IngestResponse) => void;
   setVariants: (variants: VariantPlan[]) => void;
@@ -19,6 +21,7 @@ interface StoreState {
 }
 
 export const useStore = create<StoreState>((set) => ({
+  isAuthenticated: false,
   credits: 50,
   productUrl: '',
   projectId: null,
@@ -26,6 +29,8 @@ export const useStore = create<StoreState>((set) => ({
   variants: [],
   renders: new Map(),
   currentRunId: null,
+
+  setAuthenticated: (isAuth) => set({ isAuthenticated: isAuth }),
 
   setProductUrl: (url) => set({ productUrl: url }),
 

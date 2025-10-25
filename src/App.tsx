@@ -1,22 +1,26 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { TopNav } from './components/TopNav';
+import { LandingPage } from './pages/LandingPage';
+import { SignInPage } from './pages/SignInPage';
+import { SignUpPage } from './pages/SignUpPage';
 import { CreatePage } from './pages/CreatePage';
 import { LibraryPage } from './pages/LibraryPage';
-import { BillingPage } from './pages/BillingPage';
+import { PricingPage } from './pages/PricingPage';
+import { ExamplesPage } from './pages/ExamplesPage';
 import { DocsPage } from './pages/DocsPage';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-slate-950">
-        <TopNav />
-        <Routes>
-          <Route path="/" element={<CreatePage />} />
-          <Route path="/library" element={<LibraryPage />} />
-          <Route path="/billing" element={<BillingPage />} />
-          <Route path="/docs" element={<DocsPage />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/create" element={<CreatePage />} />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/examples" element={<ExamplesPage />} />
+        <Route path="/how-it-works" element={<DocsPage />} />
+      </Routes>
     </Router>
   );
 }
