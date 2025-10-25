@@ -112,7 +112,7 @@ export class VEO3Client {
         throw new Error(`VEO3 API error: ${response.status} - ${JSON.stringify(errorData)}`);
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
 
       // Extract video URL from response
       const videoUrl = data.candidates?.[0]?.content?.parts?.[0]?.fileData?.fileUri;
@@ -152,7 +152,7 @@ export class VEO3Client {
         throw new Error(`Failed to get job status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
       const videoUrl = data.candidates?.[0]?.content?.parts?.[0]?.fileData?.fileUri;
       const thumbnailUrl = data.candidates?.[0]?.content?.parts?.[0]?.fileData?.thumbnailUri;
 
@@ -210,7 +210,7 @@ export class VEO3Client {
         throw new Error(`Failed to upload image: ${uploadResponse.status} - ${JSON.stringify(errorData)}`);
       }
 
-      const data = await uploadResponse.json();
+      const data: any = await uploadResponse.json();
       const uploadedUri = data.file?.uri;
 
       logger.info('Image uploaded successfully', { uploadedUri });

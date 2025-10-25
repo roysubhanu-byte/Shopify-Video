@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import { logger, requestLogger } from './lib/logger';
 import ingestRouter from './routes/ingest';
 import healthRouter from './routes/health';
+import planRouter from './routes/plan';
+import renderRouter from './routes/render';
+import webhooksRouter from './routes/webhooks';
 
 dotenv.config();
 
@@ -30,6 +33,9 @@ app.use(requestLogger);
 
 app.use(healthRouter);
 app.use(ingestRouter);
+app.use(planRouter);
+app.use(renderRouter);
+app.use(webhooksRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Server error', err, { endpoint: req.path, method: req.method });
@@ -50,6 +56,10 @@ async function start() {
         'GET  /healthz                  - Health check',
         'POST /api/ingest/url           - Paste URL → get 3 concepts',
         'GET  /api/ingest/products      - List user products',
+        'POST /api/plan                 - Generate validated plans',
+        'POST /api/render/previews      - Queue preview renders',
+        'POST /api/render/finals        - Queue final renders',
+        'POST /webhooks/veo             - VEO3 callback handler',
       ],
     });
 

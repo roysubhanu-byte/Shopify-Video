@@ -85,7 +85,7 @@ router.post('/api/ingest/url', async (req, res) => {
       logger.error('Failed to store brand kit', kitError);
     }
 
-    let assets = [];
+    let assets: any[] = [];
     if (product?.id && productData.images.length > 0) {
       try {
         assets = await analyzeAndStoreAssets(product.id, productData.images);
