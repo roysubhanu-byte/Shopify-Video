@@ -1,31 +1,38 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Video, Mail, Lock, Loader2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
 
 export function SignInPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const setAuthenticated = useStore((state) => state.setAuthenticated);
+  const { signIn } = useAuth();
   const setProductUrl = useStore((state) => state.setProductUrl);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const productUrl = (location.state as { productUrl?: string })?.productUrl;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setAuthenticated(true);
-    if (productUrl) {
-      setProductUrl(productUrl);
+    try {
+      await signIn(email, password);
+      if (productUrl) {
+        setProductUrl(productUrl);
+      }
+      navigate('/create');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign in');
+    } finally {
+      setIsLoading(false);
     }
-    navigate('/create');
   };
 
   return (
@@ -46,6 +53,12 @@ export function SignInPage() {
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 backdrop-blur-sm">
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">

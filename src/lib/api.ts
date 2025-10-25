@@ -5,9 +5,18 @@ import type {
   RenderResponse,
   JobStatusResponse,
 } from '../types/api';
+import { supabase } from './supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === '1';
+
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return {
+    'Content-Type': 'application/json',
+    ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+  };
+}
 
 const mockVideoUrls = [
   'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
@@ -42,9 +51,10 @@ export async function ingest(url: string): Promise<IngestResponse> {
     };
   }
 
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/ingest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ url }),
   });
 
@@ -104,9 +114,10 @@ export async function plan(projectId: string): Promise<PlanResponse> {
     };
   }
 
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/plan`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ projectId }),
   });
 
@@ -163,9 +174,10 @@ export async function renderPreviews(request: RenderRequest): Promise<RenderResp
     };
   }
 
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/render/previews`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -199,9 +211,10 @@ export async function renderFinals(request: RenderRequest): Promise<RenderRespon
     };
   }
 
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/render/finals`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(request),
   });
 
@@ -222,7 +235,8 @@ export async function getJobStatus(runId: string): Promise<JobStatusResponse> {
     return job;
   }
 
-  const response = await fetch(`${API_URL}/api/jobs/${runId}`);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/jobs/${runId}`, { headers });
 
   if (!response.ok) {
     throw new Error('Failed to get job status');

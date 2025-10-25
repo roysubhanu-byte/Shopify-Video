@@ -4,10 +4,13 @@ import { TopNav } from '../components/TopNav';
 import { UrlForm } from '../components/UrlForm';
 import { ConceptTile } from '../components/ConceptTile';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { useUserCredits } from '../hooks/useUserCredits';
 import { useStore } from '../store/useStore';
 import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
 
 export function CreatePage() {
+  useUserCredits();
+
   const [isIngesting, setIsIngesting] = useState(false);
   const [isPlanning, setIsPlanning] = useState(false);
   const [isRendering, setIsRendering] = useState(false);

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Video } from 'lucide-react';
+import { Video, LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
 
 interface TopNavProps {
@@ -8,7 +9,13 @@ interface TopNavProps {
 
 export function TopNav({ variant = 'default' }: TopNavProps) {
   const location = useLocation();
-  const { isAuthenticated, credits } = useStore();
+  const { user, signOut } = useAuth();
+  const { credits } = useStore();
+  const isAuthenticated = !!user;
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   const navItems = [
     { path: '/how-it-works', label: 'How it works' },
@@ -92,13 +99,22 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
 
           <div className="flex items-center gap-4">
             {isAuthenticated && (
-              <Link
-                to="/pricing"
-                className="text-slate-300 hover:text-white text-sm transition-colors"
-              >
-                <span className="text-blue-400 font-bold">{credits}</span>{' '}
-                <span className="text-slate-400">credits</span>
-              </Link>
+              <>
+                <Link
+                  to="/pricing"
+                  className="text-slate-300 hover:text-white text-sm transition-colors"
+                >
+                  <span className="text-blue-400 font-bold">{credits}</span>{' '}
+                  <span className="text-slate-400">credits</span>
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-2 px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg text-sm transition-colors"
+                >
+                  <LogOut size={16} />
+                  Sign out
+                </button>
+              </>
             )}
 
             {!isAuthenticated && (
