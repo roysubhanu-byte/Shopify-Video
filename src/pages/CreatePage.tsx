@@ -7,6 +7,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { useUserCredits } from '../hooks/useUserCredits';
 import { useStore } from '../store/useStore';
 import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
+import { i18n } from '../lib/i18n';
 
 export function CreatePage() {
   useUserCredits();
@@ -40,7 +41,7 @@ export function CreatePage() {
       setVariants(planData.variants);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to process URL. Please try again.');
+      alert(i18n.messages.error);
     } finally {
       setIsIngesting(false);
       setIsPlanning(false);
@@ -62,7 +63,7 @@ export function CreatePage() {
       setCurrentRunId(response.runId);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to start rendering. Please try again.');
+      alert(i18n.messages.error);
       setIsRendering(false);
     }
   };
@@ -153,10 +154,10 @@ export function CreatePage() {
                   className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
                 >
                   {isRendering ? (
-                    'Rendering Previews...'
+                    i18n.messages.rendering
                   ) : (
                     <>
-                      Create 3 Previews
+                      {i18n.cta.create3}
                       <ArrowRight size={20} />
                     </>
                   )}

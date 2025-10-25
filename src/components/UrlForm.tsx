@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link2, Loader2, Palette } from 'lucide-react';
+import { i18n } from '../lib/i18n';
 
 interface UrlFormProps {
   onSubmit: (url: string, vertical: string) => void;
@@ -39,7 +40,7 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste your Shopify or WooCommerce product URL..."
+              placeholder={`Paste your ${i18n.labels.shopUrl}...`}
               className="w-full pl-12 pr-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={isLoading}
               required
@@ -48,7 +49,7 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Product Vertical
+              {i18n.labels.vertical}
             </label>
             <select
               value={vertical}
@@ -78,10 +79,10 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
           {isLoading ? (
             <>
               <Loader2 size={20} className="animate-spin" />
-              Analyzing product...
+              {i18n.messages.ingesting}
             </>
           ) : (
-            'Generate Hooks'
+            i18n.cta.generateHooks
           )}
         </button>
       </form>

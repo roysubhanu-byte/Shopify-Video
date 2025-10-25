@@ -1,5 +1,6 @@
 import { Play, Loader2, CheckCircle2, Sparkles, Copy, RefreshCw } from 'lucide-react';
 import type { VariantPlan, VariantRender } from '../types/api';
+import { i18n } from '../lib/i18n';
 
 interface ConceptTileProps {
   variant: VariantPlan;
@@ -77,14 +78,14 @@ export function ConceptTile({
           <div className="w-full aspect-[9/16] bg-slate-900 rounded-lg flex flex-col items-center justify-center gap-3">
             <Loader2 size={32} className="text-blue-500 animate-spin" />
             <span className="text-slate-400 text-sm">
-              {render?.status === 'queued' ? 'Queued...' : 'Rendering...'}
+              {render?.status === 'queued' ? i18n.messages.rendering : i18n.messages.rendering}
             </span>
           </div>
         ) : (
           <div className="w-full aspect-[9/16] bg-slate-900 rounded-lg flex items-center justify-center">
             <div className="text-center text-slate-500">
               <Play size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Preview not rendered</p>
+              <p className="text-sm">{i18n.messages.ready}</p>
             </div>
           </div>
         )}
@@ -102,7 +103,7 @@ export function ConceptTile({
                   className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
                 >
                   <Sparkles size={14} />
-                  Finalize
+                  {i18n.cta.finalize}
                 </button>
               )}
             </div>

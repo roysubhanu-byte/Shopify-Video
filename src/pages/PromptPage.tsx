@@ -4,6 +4,7 @@ import { TopNav } from '../components/TopNav';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { useUserCredits } from '../hooks/useUserCredits';
 import { promptPlan, promptRenderPreview, promptRenderFinal, getPromptJobStatus } from '../lib/api';
+import { i18n } from '../lib/i18n';
 import type { ScriptBeat, Overlay, PromptPlanResponse } from '../types/api';
 
 interface ValidationError {
@@ -504,12 +505,12 @@ export function PromptPage() {
                   {isRenderingPreview ? (
                     <>
                       <Loader2 size={20} className="animate-spin" />
-                      Rendering Preview...
+                      {i18n.messages.rendering}
                     </>
                   ) : (
                     <>
                       <Play size={20} />
-                      Preview (8-10s) - 1 credit
+                      {i18n.cta.preview} (8-10s) - 1 credit
                     </>
                   )}
                 </button>
@@ -522,12 +523,12 @@ export function PromptPage() {
                   {isRenderingFinal ? (
                     <>
                       <Loader2 size={20} className="animate-spin" />
-                      Rendering Final...
+                      {i18n.messages.rendering}
                     </>
                   ) : (
                     <>
                       <Sparkles size={20} />
-                      Finalize (20-24s) - 3 credits
+                      {i18n.cta.finalize} (20-24s) - 3 credits
                     </>
                   )}
                 </button>

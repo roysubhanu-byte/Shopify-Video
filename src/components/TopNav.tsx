@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Video, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/useStore';
+import { i18n } from '../lib/i18n';
 
 interface TopNavProps {
   variant?: 'default' | 'landing';
@@ -32,7 +33,7 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Video size={18} />
               </div>
-              <span className="font-bold text-xl">HOBA</span>
+              <span className="font-bold text-xl">{i18n.app.name}</span>
             </Link>
 
             <div className="flex items-center gap-6">
@@ -68,7 +69,7 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Video size={18} />
               </div>
-              <span className="font-bold text-xl">HOBA</span>
+              <span className="font-bold text-xl">{i18n.app.name}</span>
             </Link>
 
             {isAuthenticated && (
@@ -125,7 +126,7 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-colors"
                 >
                   <span className="text-blue-400 font-bold">{credits}</span>{' '}
-                  <span className="text-slate-300">credits</span>
+                  <span className="text-slate-300">{i18n.labels.credits.toLowerCase()}</span>
                 </Link>
                 <button
                   onClick={handleSignOut}
