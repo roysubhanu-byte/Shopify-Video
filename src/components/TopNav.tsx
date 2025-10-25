@@ -103,6 +103,16 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
                 >
                   Library
                 </Link>
+                <Link
+                  to="/billing"
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    location.pathname === '/billing'
+                      ? 'bg-slate-800 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  }`}
+                >
+                  Billing
+                </Link>
               </div>
             )}
           </div>
@@ -111,11 +121,11 @@ export function TopNav({ variant = 'default' }: TopNavProps) {
             {isAuthenticated && (
               <>
                 <Link
-                  to="/pricing"
-                  className="text-slate-300 hover:text-white text-sm transition-colors"
+                  to="/billing"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-colors"
                 >
                   <span className="text-blue-400 font-bold">{credits}</span>{' '}
-                  <span className="text-slate-400">credits</span>
+                  <span className="text-slate-300">credits</span>
                 </Link>
                 <button
                   onClick={handleSignOut}

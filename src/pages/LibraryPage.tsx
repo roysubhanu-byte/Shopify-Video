@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Video, Play, Loader2 } from 'lucide-react';
+import { Video, Play, Loader2, Download, Share2, Filter } from 'lucide-react';
 import { TopNav } from '../components/TopNav';
 import { useUserCredits } from '../hooks/useUserCredits';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,6 +28,8 @@ export function LibraryPage() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [verticalFilter, setVerticalFilter] = useState<string>('all');
 
   useEffect(() => {
     if (!user) return;
@@ -109,6 +111,28 @@ export function LibraryPage() {
     );
   }
 
+  const filteredProjects = projects.filter(project => {
+    if (statusFilter !== 'all' && project.status !== statusFilter) return false;
+    if (verticalFilter !== 'all' && project.vertical !== verticalFilter) return false;
+    return true;
+  });
+
+  const handleDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+  };
+
+  const handleShare = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Link copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950">
       <TopNav />
@@ -123,8 +147,38 @@ export function LibraryPage() {
           </Link>
         </div>
 
+        <div className="mb-6 flex items-center gap-4">
+          <div className="flex items-center gap-2 text-slate-400">
+            <Filter size={18} />
+            <span className="text-sm font-medium">Filters:</span>
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Status</option>
+            <option value="done">Done</option>
+            <option value="rendering">Rendering</option>
+            <option value="draft">Draft</option>
+            <option value="error">Error</option>
+          </select>
+          <select
+            value={verticalFilter}
+            onChange={(e) => setVerticalFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Verticals</option>
+            <option value="beauty">Beauty</option>
+            <option value="fashion">Fashion</option>
+            <option value="electronics">Electronics</option>
+            <option value="home">Home</option>
+            <option value="health">Health</option>
+          </select>
+        </div>
+
         <div className="space-y-8">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <div
               key={project.id}
               className="bg-slate-900 border border-slate-800 rounded-xl p-6"
@@ -177,15 +231,42 @@ export function LibraryPage() {
                       </p>
 
                       {variant.video_url ? (
-                        <a
-                          href={variant.video_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
-                        >
-                          <Play size={16} />
-                          Watch Video
-                        </a>
+                        <div className="space-y-2">
+                          <a
+                            href={variant.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+                          >
+                            <Play size={16} />
+                            Watch Video
+                          </a>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDownload(variant.video_url!, `${project.title}-${variant.concept_tag}.mp4`)}
+                              className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
+                            >
+                              <Download size={14} />
+                              MP4
+                            </button>
+                            {variant.srt_url && (
+                              <button
+                                onClick={() => handleDownload(variant.srt_url!, `${project.title}-${variant.concept_tag}.srt`)}
+                                className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
+                              >
+                                <Download size={14} />
+                                SRT
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleShare(variant.video_url!)}
+                              className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
+                            >
+                              <Share2 size={14} />
+                              Share
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-center w-full py-2 bg-slate-700 text-slate-400 rounded-lg text-sm cursor-not-allowed">
                           No video yet

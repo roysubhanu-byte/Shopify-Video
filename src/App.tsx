@@ -6,6 +6,7 @@ import { SignUpPage } from './pages/SignUpPage';
 import { CreatePage } from './pages/CreatePage';
 import { PromptPage } from './pages/PromptPage';
 import { LibraryPage } from './pages/LibraryPage';
+import { BillingPage } from './pages/BillingPage';
 import { PricingPage } from './pages/PricingPage';
 import { ExamplesPage } from './pages/ExamplesPage';
 import { DocsPage } from './pages/DocsPage';
@@ -20,6 +21,7 @@ function App() {
         <Route path="/create" element={<ProtectedRoute><CreatePage /></ProtectedRoute>} />
         <Route path="/prompt" element={<ProtectedRoute><PromptPage /></ProtectedRoute>} />
         <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
+        <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/examples" element={<ExamplesPage />} />
         <Route path="/how-it-works" element={<DocsPage />} />

@@ -18,6 +18,7 @@ export function CreatePage() {
 
   const {
     projectId,
+    productData,
     variants,
     renders,
     currentRunId,
@@ -27,7 +28,7 @@ export function CreatePage() {
     setCurrentRunId,
   } = useStore();
 
-  const handleUrlSubmit = async (url: string) => {
+  const handleUrlSubmit = async (url: string, vertical: string) => {
     setIsIngesting(true);
     setIsPlanning(true);
 
@@ -111,7 +112,11 @@ export function CreatePage() {
               </p>
             </div>
 
-            <UrlForm onSubmit={handleUrlSubmit} isLoading={isIngesting || isPlanning} />
+            <UrlForm
+              onSubmit={handleUrlSubmit}
+              isLoading={isIngesting || isPlanning}
+              productData={productData}
+            />
           </div>
         ) : (
           <div>
