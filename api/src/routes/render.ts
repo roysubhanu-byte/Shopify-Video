@@ -435,6 +435,236 @@ router.post('/api/render/finals', async (req, res) => {
 });
 
 /**
+ * POST /api/render/swap-hook
+ * Generate new preview with swapped hook line
+ */
+router.post('/api/render/swap-hook', async (req, res) => {
+  try {
+    const { variantId, newHookLine, userId } = req.body;
+
+    if (!variantId || !newHookLine) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['variantId', 'newHookLine'],
+      });
+    }
+
+    logger.info('Starting hook swap', { variantId, newHookLine });
+
+    // Get variant with plan
+    const { data: variant, error: variantError } = await supabase
+      .from('variants')
+      .select('*')
+      .eq('id', variantId)
+      .maybeSingle();
+
+    if (variantError || !variant) {
+      logger.error('Variant not found', { variantId, error: variantError });
+      return res.status(404).json({ error: 'Variant not found' });
+    }
+
+    if (!variant.script_json) {
+      return res.status(400).json({ error: 'Variant missing plan' });
+    }
+
+    // Load plan and replace HOOK beat
+    const plan = variant.script_json as Plan;
+    const hookBeat = plan.beats.find((b) => b.type === 'hook');
+
+    if (!hookBeat) {
+      return res.status(400).json({ error: 'Plan missing HOOK beat' });
+    }
+
+    // Keep seed and visuals; replace only hook text
+    if (hookBeat.voiceOver) {
+      hookBeat.voiceOver.text = newHookLine;
+    }
+    if (hookBeat.overlays && hookBeat.overlays.length > 0) {
+      // Keep first 6 words for overlay
+      const words = newHookLine.split(/\s+/).slice(0, 6);
+      hookBeat.overlays[0].text = words.join(' ');
+    }
+
+    logger.info('Hook replaced in plan', {
+      variantId,
+      oldOverlay: variant.script_json.beats.find((b: any) => b.type === 'hook')?.overlays?.[0]?.text,
+      newOverlay: hookBeat.overlays?.[0]?.text,
+    });
+
+    // Save updated plan
+    await supabase
+      .from('variants')
+      .update({ script_json: plan })
+      .eq('id', variantId);
+
+    // Compile preview prompt with new plan
+    const { system, user, control } = compilePreviewPrompt(plan);
+
+    // Validate compiled prompt
+    const validation = validateCompiledPrompt({ system, user, control });
+    if (!validation.valid) {
+      logger.error('Compiled prompt validation failed', {
+        variantId,
+        errors: validation.errors,
+      });
+      return res.status(400).json({
+        error: 'Compiled prompt validation failed',
+        details: validation.errors,
+      });
+    }
+
+    // Check credits if userId provided
+    if (userId) {
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userError || !user) {
+        logger.error('User not found', { userId, error: userError });
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (user.credits < 1) {
+        return res.status(402).json({
+          error: 'Insufficient credits',
+          required: 1,
+          available: user.credits,
+        });
+      }
+
+      // Deduct 1 preview credit
+      await supabase
+        .from('users')
+        .update({ credits: user.credits - 1 })
+        .eq('id', userId);
+
+      logger.info('Preview credit deducted', { userId, remaining: user.credits - 1 });
+    }
+
+    // Create run record
+    const { data: run, error: runError } = await supabase
+      .from('runs')
+      .insert({
+        variant_id: variant.id,
+        engine: 'veo_fast',
+        state: 'queued',
+        veo_model: 'veo_fast',
+        beat_duration: 6,
+        request_json: control,
+        cost_seconds: 9,
+      })
+      .select()
+      .maybeSingle();
+
+    if (runError || !run) {
+      logger.error('Failed to create run', { variantId, error: runError });
+      return res.status(500).json({ error: 'Failed to create run record' });
+    }
+
+    // Build webhook URL with runId
+    const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 8787}`;
+    const webhookUrl = `${baseUrl}/webhooks/veo?runId=${run.id}`;
+
+    // Get seed from plan or use variant seed
+    const seed = plan.beats[0]?.seed || variant.seed || 341991;
+
+    // Get first beat's assets for the 9s preview
+    const firstBeat = plan.beats[0];
+    const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
+
+    logger.info('Calling VEO3 Fast for hook swap', {
+      runId: run.id,
+      variantId,
+      seed,
+      webhookUrl,
+      imageCount: referenceImages.length,
+      newHookLine,
+    });
+
+    // Call VEO3 Fast API
+    const veo3Client = createVEO3Client('veo_fast');
+
+    try {
+      // Update run to running state
+      await supabase
+        .from('runs')
+        .update({ state: 'running' })
+        .eq('id', run.id);
+
+      const veoResult = await veo3Client.generateVideo({
+        prompt: `${system}\n\n${user}`,
+        duration: 9,
+        aspectRatio: '9:16',
+        referenceImages,
+        includeAudio: false,
+      });
+
+      logger.info('VEO3 Fast called successfully for hook swap', {
+        runId: run.id,
+        jobId: veoResult.jobId,
+        status: veoResult.status,
+      });
+
+      // Store VEO3 job ID
+      await supabase
+        .from('runs')
+        .update({
+          response_json: { veoJobId: veoResult.jobId, webhookUrl, hookSwap: true },
+        })
+        .eq('id', run.id);
+
+      // Update variant status
+      await supabase
+        .from('variants')
+        .update({ status: 'previewing' })
+        .eq('id', variant.id);
+
+      res.json({
+        success: true,
+        runId: run.id,
+        variantId,
+        newHookLine,
+        message: 'Hook swap preview initiated with VEO3 Fast',
+        creditsCharged: userId ? 1 : 0,
+      });
+
+    } catch (veoError) {
+      logger.error('VEO3 API call failed for hook swap', {
+        runId: run.id,
+        error: veoError,
+      });
+
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+        })
+        .eq('id', run.id);
+
+      await supabase
+        .from('variants')
+        .update({ status: 'error' })
+        .eq('id', variant.id);
+
+      return res.status(500).json({
+        error: 'VEO3 API call failed',
+        details: veoError instanceof Error ? veoError.message : 'Unknown error',
+      });
+    }
+
+  } catch (error) {
+    logger.error('Hook swap error', { error });
+    res.status(500).json({
+      error: 'Failed to swap hook',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
  * GET /api/render/:runId/status
  * Get render status
  */
