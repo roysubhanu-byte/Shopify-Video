@@ -4,6 +4,8 @@ import { Logger } from '../lib/logger';
 import { runOcrQa, extractExpectedOverlays } from '../lib/ocrQa';
 import { burnOverlaysWithFFmpeg } from '../lib/overlayComposer';
 import { Plan, Overlay } from '../../../packages/shared/src/plan';
+import { generateSRT, uploadSRTToStorage, validateSRT } from '../lib/srt-generator';
+import { WordTimestamp } from '../lib/tts-service';
 import * as path from 'path';
 
 const router = Router();
@@ -101,6 +103,7 @@ router.post('/webhooks/veo', async (req, res) => {
 
       // Determine if this is a preview or final render
       const isPreview = run.engine === 'veo_fast' && run.cost_seconds === 9;
+      const isFinal = run.engine === 'veo_3' || (run.engine === 'veo_fast' && run.cost_seconds >= 20);
 
       // Extract expected overlays from plan
       const allOverlays: Overlay[] = plan.beats.flatMap((beat) => beat.overlays);
@@ -235,12 +238,69 @@ router.post('/webhooks/veo', async (req, res) => {
       // Update variant with final video URL (preview_url for previews)
       await updateVariantWithVideo(run.variant_id, finalVideoUrl, isPreview);
 
-      logger.info('Webhook processing complete for preview', {
+      // If this is a final render, generate SRT from TTS timestamps
+      let srtUrl: string | undefined;
+
+      if (isFinal && run.response_json?.ttsResult?.wordTimestamps) {
+        logger.info('Generating SRT subtitles for final video', {
+          runId,
+          wordCount: run.response_json.ttsResult.wordTimestamps.length,
+        });
+
+        try {
+          const wordTimestamps: WordTimestamp[] = run.response_json.ttsResult.wordTimestamps;
+          const srtContent = generateSRT(wordTimestamps);
+
+          // Validate SRT
+          const srtValidation = validateSRT(srtContent);
+          if (!srtValidation.valid) {
+            logger.error('SRT validation failed', {
+              runId,
+              errors: srtValidation.errors,
+            });
+          } else {
+            logger.info('SRT generated successfully', {
+              runId,
+              cueCount: srtValidation.cueCount,
+            });
+
+            // Upload SRT to storage
+            srtUrl = await uploadSRTToStorage(srtContent, runId);
+
+            logger.info('SRT uploaded', {
+              runId,
+              srtUrl,
+            });
+
+            // Store SRT URL in run
+            await supabase
+              .from('runs')
+              .update({
+                response_json: {
+                  ...run.response_json,
+                  videoUrl: finalVideoUrl,
+                  srtUrl,
+                  qaResult,
+                },
+              })
+              .eq('id', runId);
+          }
+        } catch (srtError) {
+          logger.error('SRT generation failed', {
+            runId,
+            error: srtError,
+          });
+        }
+      }
+
+      logger.info('Webhook processing complete', {
         runId,
         variantId: run.variant_id,
         finalVideoUrl,
         qaOk: qaResult.ok,
         burnedIn: !qaResult.ok,
+        isFinal,
+        hasSRT: !!srtUrl,
       });
 
       return res.json({
@@ -251,8 +311,12 @@ router.post('/webhooks/veo', async (req, res) => {
           missingOverlays: qaResult.missingOverlays,
         },
         videoUrl: finalVideoUrl,
+        srtUrl,
         burnedIn: !qaResult.ok,
-        message: 'Preview video processed with QA and burn-in fallback',
+        isFinal,
+        message: isFinal
+          ? 'Final video processed with QA, burn-in fallback, and SRT subtitles'
+          : 'Preview video processed with QA and burn-in fallback',
       });
     }
 

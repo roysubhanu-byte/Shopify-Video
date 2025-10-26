@@ -4,6 +4,7 @@ import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
 import { Plan } from '../../../packages/shared/src/plan';
 import { createVEO3Client } from '../lib/veo3-client';
+import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
 
 const router = Router();
 const logger = new Logger({ module: 'render-route' });
@@ -232,6 +233,7 @@ router.post('/api/render/finals', async (req, res) => {
     }
 
     const runs: any[] = [];
+    const veo3Client = createVEO3Client('veo_fast');
 
     for (const variant of variants) {
       if (!variant.script_json) {
@@ -241,13 +243,36 @@ router.post('/api/render/finals', async (req, res) => {
 
       const plan = variant.script_json as Plan;
 
-      // Compile prompt with audio URL
-      const compiled = audioUrl
-        ? compileFinalPrompt(plan, audioUrl)
-        : compilePreviewPrompt(plan);
+      // Step 1: Generate TTS audio for all beats with word timestamps
+      logger.info('Generating TTS for final video', {
+        variantId: variant.id,
+        beatCount: plan.beats.length,
+      });
+
+      const ttsResult = await generateTTSForBeats(plan.beats);
+
+      // Validate TTS result
+      const ttsValidation = validateTTSResult(ttsResult, plan.targetDuration);
+      if (!ttsValidation.valid) {
+        logger.error('TTS validation failed', {
+          variantId: variant.id,
+          errors: ttsValidation.errors,
+        });
+        continue;
+      }
+
+      logger.info('TTS generated successfully', {
+        variantId: variant.id,
+        audioUrl: ttsResult.audioUrl,
+        duration: ttsResult.duration,
+        wordCount: ttsResult.allWordTimestamps.length,
+      });
+
+      // Step 2: Compile final prompt with TTS audio URL
+      const { system, user, control } = compileFinalPrompt(plan, ttsResult.audioUrl);
 
       // Validate compiled prompt
-      const validation = validateCompiledPrompt(compiled);
+      const validation = validateCompiledPrompt({ system, user, control });
       if (!validation.valid) {
         logger.error('Compiled prompt validation failed', {
           variantId: variant.id,
@@ -256,38 +281,124 @@ router.post('/api/render/finals', async (req, res) => {
         continue;
       }
 
-      // Create run record
+      // Create run record first to get runId for webhook
       const { data: run, error: runError } = await supabase
         .from('runs')
         .insert({
           variant_id: variant.id,
-          engine: 'veo_fast',
+          engine: 'veo_3',
           state: 'queued',
-          veo_model: 'veo_fast',
+          veo_model: 'veo_3',
           beat_duration: 6,
-          request_json: compiled.control,
+          request_json: control,
           cost_seconds: plan.targetDuration,
         })
         .select()
         .maybeSingle();
 
-      if (runError) {
+      if (runError || !run) {
         logger.error('Failed to create run', { variantId: variant.id, error: runError });
         continue;
       }
 
-      runs.push(run);
-
-      // Update variant status
+      // Store TTS data in run for webhook to use
       await supabase
-        .from('variants')
-        .update({ status: 'finalizing' })
-        .eq('id', variant.id);
+        .from('runs')
+        .update({
+          response_json: {
+            ttsResult: {
+              audioUrl: ttsResult.audioUrl,
+              wordTimestamps: ttsResult.allWordTimestamps,
+              duration: ttsResult.duration,
+            },
+          },
+        })
+        .eq('id', run.id);
 
-      logger.info('Final render queued', {
+      // Build webhook URL with runId
+      const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 8787}`;
+      const webhookUrl = `${baseUrl}/webhooks/veo?runId=${run.id}`;
+
+      // Get seed from plan or use variant seed
+      const seed = plan.beats[0]?.seed || variant.seed || 341991;
+
+      // Get all assets for the full video
+      const allAssetUrls = plan.selectedAssets.map((a) => a.url);
+
+      logger.info('Calling VEO3 for final video', {
+        runId: run.id,
         variantId: variant.id,
-        runId: run?.id,
+        seed,
+        webhookUrl,
+        audioUrl: ttsResult.audioUrl,
+        assetCount: allAssetUrls.length,
       });
+
+      // Step 3: Call VEO3 (full model) with audio and beat windows
+      try {
+        // Update run to running state
+        await supabase
+          .from('runs')
+          .update({ state: 'running' })
+          .eq('id', run.id);
+
+        const veoResult = await veo3Client.generateVideo({
+          prompt: `${system}\n\n${user}`,
+          duration: plan.targetDuration, // 20-24s for final
+          aspectRatio: '9:16',
+          referenceImages: allAssetUrls,
+          includeAudio: true,
+        });
+
+        logger.info('VEO3 called successfully for final', {
+          runId: run.id,
+          jobId: veoResult.jobId,
+          status: veoResult.status,
+        });
+
+        // Update with VEO3 job ID
+        await supabase
+          .from('runs')
+          .update({
+            response_json: {
+              veoJobId: veoResult.jobId,
+              webhookUrl,
+              ttsResult: {
+                audioUrl: ttsResult.audioUrl,
+                wordTimestamps: ttsResult.allWordTimestamps,
+                duration: ttsResult.duration,
+              },
+            },
+          })
+          .eq('id', run.id);
+
+        runs.push(run);
+
+        // Update variant status
+        await supabase
+          .from('variants')
+          .update({ status: 'finalizing' })
+          .eq('id', variant.id);
+
+      } catch (veoError) {
+        logger.error('VEO3 API call failed for final', {
+          runId: run.id,
+          error: veoError,
+        });
+
+        await supabase
+          .from('runs')
+          .update({
+            state: 'failed',
+            error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+          })
+          .eq('id', run.id);
+
+        await supabase
+          .from('variants')
+          .update({ status: 'error' })
+          .eq('id', variant.id);
+      }
     }
 
     // Deduct credits
@@ -296,7 +407,7 @@ router.post('/api/render/finals', async (req, res) => {
       .update({ credits: user.credits - requiredCredits })
       .eq('id', userId);
 
-    logger.info('Final renders queued', {
+    logger.info('Final renders initiated', {
       projectId,
       runCount: runs.length,
       creditsCharged: requiredCredits,
@@ -312,7 +423,7 @@ router.post('/api/render/finals', async (req, res) => {
       })),
       creditsCharged: requiredCredits,
       creditsRemaining: user.credits - requiredCredits,
-      message: 'Final renders queued. In production, VEO3 API would be called here.',
+      message: `${runs.length} final renders initiated with TTS audio and VEO3`,
     });
   } catch (error) {
     logger.error('Final render error', { error });
