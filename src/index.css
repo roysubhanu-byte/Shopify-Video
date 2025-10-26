@@ -65,3 +65,20 @@
     @apply bg-gray-700 text-muted border border-gray-600;
   }
 }
+
+@layer utilities {
+  @keyframes slide-up {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+}

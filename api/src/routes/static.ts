@@ -10,7 +10,7 @@ const logger = new Logger({ module: 'static-route' });
 
 router.post('/api/render/static', async (req, res) => {
   try {
-    const { variantId, layout } = req.body;
+    const { variantId, layout, userId } = req.body;
 
     if (!variantId) {
       return res.status(400).json({
@@ -18,7 +18,7 @@ router.post('/api/render/static', async (req, res) => {
       });
     }
 
-    logger.info('Generating static images', { variantId, layout });
+    logger.info('Generating static images', { variantId, layout, userId });
 
     const { data: variant, error: variantError } = await supabase
       .from('variants')
@@ -29,6 +29,54 @@ router.post('/api/render/static', async (req, res) => {
     if (variantError || !variant) {
       logger.error('Variant not found', { variantId, error: variantError });
       return res.status(404).json({ error: 'Variant not found' });
+    }
+
+    const projectUserId = variant.projects?.user_id;
+
+    if (userId && projectUserId) {
+      const STATIC_CREDIT_COST = 5;
+
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', projectUserId)
+        .maybeSingle();
+
+      if (userError) {
+        logger.warn('Failed to fetch user credits', { error: userError, userId: projectUserId });
+      } else if (userData) {
+        const currentCredits = userData.credits || 0;
+
+        if (currentCredits < STATIC_CREDIT_COST) {
+          logger.warn('Insufficient credits for static generation', {
+            userId: projectUserId,
+            needed: STATIC_CREDIT_COST,
+            current: currentCredits,
+          });
+
+          return res.status(402).json({
+            error: 'Insufficient credits',
+            needed: STATIC_CREDIT_COST,
+            current: currentCredits,
+          });
+        }
+
+        const { error: deductError } = await supabase
+          .from('users')
+          .update({ credits: currentCredits - STATIC_CREDIT_COST })
+          .eq('id', projectUserId);
+
+        if (deductError) {
+          logger.error('Failed to deduct credits', { error: deductError, userId: projectUserId });
+          return res.status(500).json({ error: 'Failed to process credits' });
+        }
+
+        logger.info('Credits deducted for static generation', {
+          userId: projectUserId,
+          amount: STATIC_CREDIT_COST,
+          remaining: currentCredits - STATIC_CREDIT_COST,
+        });
+      }
     }
 
     if (!variant.script_json) {
@@ -53,6 +101,7 @@ router.post('/api/render/static', async (req, res) => {
     const ctaText = ctaBeat?.overlays?.[0]?.text || 'Get Yours Now';
 
     const brandBg = brandKit.palette?.primary || '#1a1a1a';
+    const brandSlate = '#334155';
     const accent = brandKit.palette?.accent || brandKit.palette?.secondary || '#ff6b35';
 
     const productImages = product.images || [];
@@ -62,16 +111,19 @@ router.post('/api/render/static', async (req, res) => {
       {
         name: 'v1',
         backgroundImageUrl: productImages[0],
+        brandBg: productImages[0] ? undefined : brandBg,
         position: 'top' as const,
       },
       {
         name: 'v2',
         backgroundImageUrl: productImages[1] || productImages[0],
+        brandBg: (productImages[1] || productImages[0]) ? undefined : brandBg,
         position: 'center' as const,
       },
       {
         name: 'v3',
         backgroundImageUrl: undefined,
+        brandBg: brandSlate,
         position: 'bottom' as const,
       },
     ];
@@ -94,7 +146,7 @@ router.post('/api/render/static', async (req, res) => {
           width: 1080,
           height: 1920,
           backgroundImageUrl: variantConfig.backgroundImageUrl,
-          brandBg,
+          brandBg: variantConfig.brandBg || brandBg,
           accent,
           hookText,
           ctaText,

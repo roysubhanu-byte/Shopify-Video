@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Video, Image as ImageIcon, Download } from 'lucide-react';
+import { Video, Image as ImageIcon, Download, Coins } from 'lucide-react';
 
 interface ModeTabsProps {
   conceptsData: Array<{
@@ -12,9 +12,10 @@ interface ModeTabsProps {
   }>;
   onGenerateStatic: (variantId: string, conceptTag: string) => void;
   generatingStatic?: Set<string>;
+  creditsEnabled?: boolean;
 }
 
-export function ModeTabs({ conceptsData, onGenerateStatic, generatingStatic = new Set() }: ModeTabsProps) {
+export function ModeTabs({ conceptsData, onGenerateStatic, generatingStatic = new Set(), creditsEnabled = false }: ModeTabsProps) {
   const [activeTab, setActiveTab] = useState<'video' | 'static'>('video');
 
   return (
@@ -85,6 +86,15 @@ export function ModeTabs({ conceptsData, onGenerateStatic, generatingStatic = ne
 
       {activeTab === 'static' && (
         <div className="space-y-8">
+          {creditsEnabled && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+              <Coins className="w-5 h-5 text-blue-600" />
+              <p className="text-sm text-blue-800">
+                <span className="font-semibold">Uses 5 credits for 3 images</span> per concept
+              </p>
+            </div>
+          )}
+
           {conceptsData.map((concept) => (
             <div key={concept.id} className="border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
