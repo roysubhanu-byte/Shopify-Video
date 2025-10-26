@@ -9,6 +9,7 @@ import renderRouter from './routes/render';
 import webhooksRouter from './routes/webhooks';
 import productsRouter from './routes/products';
 import hooksRouter from './routes/hooks';
+import staticRouter from './routes/static';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ app.use(renderRouter);
 app.use(webhooksRouter);
 app.use(productsRouter);
 app.use(hooksRouter);
+app.use(staticRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Server error', err, { endpoint: req.path, method: req.method });
@@ -66,6 +68,8 @@ async function start() {
         'POST /api/render/previews      - Queue preview renders',
         'POST /api/render/finals        - Queue final renders',
         'POST /api/render/swap-hook     - Generate preview with new hook',
+        'POST /api/render/static        - Generate static PNG images',
+        'GET  /static/*                 - Serve static files',
         'POST /webhooks/veo             - VEO3 callback handler',
       ],
     });
