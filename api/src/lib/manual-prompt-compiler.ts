@@ -1,4 +1,13 @@
 import { Logger } from './logger';
+import {
+  FrameworkType,
+  STORYTELLING_FRAMEWORKS,
+  detectProductCategory,
+  enhancePromptWithFramework,
+  generateFrameworkGuidance,
+  ProductCategory,
+} from './storytelling-frameworks';
+import { getThemeForCategory, mergeThemeWithBrandKit } from './category-themes';
 
 const logger = new Logger({ module: 'manual-prompt-compiler' });
 
@@ -22,6 +31,10 @@ export interface EnhancedPrompt {
   overlayInstructions: string;
   shotSequence: string;
   visualStyle: string;
+  framework?: string;
+  frameworkGuidance?: string;
+  detectedCategory?: ProductCategory;
+  appliedTheme?: string;
 }
 
 interface RegionalSpec {
@@ -87,27 +100,68 @@ export function compileManualPrompt(input: {
   brandColors: string[];
   brandTonePrompt?: string;
   targetMarket?: string;
+  framework?: FrameworkType;
 }): EnhancedPrompt {
+  // Detect product category
+  const detectedCategory = detectProductCategory(input.product);
+
+  // Get category theme
+  const categoryTheme = getThemeForCategory(detectedCategory);
+
   logger.info('Compiling manual prompt', {
     userPromptLength: input.userPrompt.length,
     targetMarket: input.targetMarket || 'Global',
     hasBrandTone: !!input.brandTonePrompt,
+    framework: input.framework,
+    detectedCategory,
+    theme: categoryTheme.name,
   });
 
   const targetMarket = input.targetMarket || 'Global';
-  const primaryColor = input.brandColors[0] || '#000000';
+  const primaryColor = input.brandColors[0] || categoryTheme.colors.primary;
+
+  // Generate framework guidance if framework is specified
+  let frameworkGuidance: string | undefined;
+  let enhancedUserPrompt = input.userPrompt;
+
+  if (input.framework) {
+    frameworkGuidance = generateFrameworkGuidance(input.framework, {
+      ...input.product,
+      category: detectedCategory,
+    });
+
+    // Enhance user prompt with framework structure
+    enhancedUserPrompt = enhancePromptWithFramework(
+      input.userPrompt,
+      input.framework,
+      { ...input.product, category: detectedCategory }
+    );
+  }
 
   const productSpec = buildProductSpecificity(input.product);
   const regionalContext = buildRegionalContext(targetMarket, input.brandTonePrompt);
   const characterConsistency = buildCharacterConsistency(targetMarket);
-  const overlayInstructions = buildOverlayInstructions(input.userPrompt, primaryColor);
-  const shotSequence = buildShotSequence(input.userPrompt, input.product, targetMarket);
-  const visualStyle = buildVisualStyle(input.brandTonePrompt, targetMarket, primaryColor);
+  const overlayInstructions = buildOverlayInstructions(input.userPrompt, primaryColor, categoryTheme);
+  const shotSequence = buildShotSequence(
+    input.framework ? enhancedUserPrompt : input.userPrompt,
+    input.product,
+    targetMarket,
+    input.framework
+  );
+  const visualStyle = buildVisualStyle(
+    input.brandTonePrompt,
+    targetMarket,
+    primaryColor,
+    categoryTheme,
+    input.framework
+  );
 
   const fullPrompt = `
 PROFESSIONAL VIDEO ADVERTISEMENT - 9:16 VERTICAL FORMAT
 
 USER CONCEPT: ${input.userPrompt}
+
+${frameworkGuidance ? `\n${frameworkGuidance}\n` : ''}
 
 ${productSpec}
 
@@ -129,11 +183,13 @@ TECHNICAL REQUIREMENTS:
 - High production value, premium feel
 - Brand colors (${primaryColor}) prominently featured
 - Maintain visual continuity between all shots
+- Category Style: ${categoryTheme.name} (${categoryTheme.description})
 
 BRAND ALIGNMENT:
 - Brand: ${input.brandName}
 - Tone: ${input.brandTonePrompt || 'Premium, authentic, engaging'}
 - Target Audience: ${targetMarket}
+- Product Category: ${detectedCategory}
 
 Remember: Create scroll-stopping content that tells a complete story while staying true to the user's vision: "${input.userPrompt}"
 `.trim();
@@ -141,6 +197,8 @@ Remember: Create scroll-stopping content that tells a complete story while stayi
   logger.info('Manual prompt compiled successfully', {
     fullPromptLength: fullPrompt.length,
     productType: detectProductType(input.product.title),
+    framework: input.framework,
+    category: detectedCategory,
   });
 
   return {
@@ -151,6 +209,10 @@ Remember: Create scroll-stopping content that tells a complete story while stayi
     overlayInstructions,
     shotSequence,
     visualStyle,
+    framework: input.framework,
+    frameworkGuidance,
+    detectedCategory,
+    appliedTheme: categoryTheme.name,
   };
 }
 
@@ -219,7 +281,7 @@ CHARACTER CONSISTENCY (CRITICAL):
 `.trim();
 }
 
-function buildOverlayInstructions(userPrompt: string, primaryColor: string): string {
+function buildOverlayInstructions(userPrompt: string, primaryColor: string, theme: any): string {
   const hookWords = userPrompt.split(' ').slice(0, 6).join(' ');
 
   return `
@@ -255,12 +317,25 @@ IMPORTANT: If VEO3 cannot render text, overlays will be burned in post-productio
 `.trim();
 }
 
-function buildShotSequence(userPrompt: string, product: ProductData, targetMarket: string): string {
+function buildShotSequence(userPrompt: string, product: ProductData, targetMarket: string, framework?: FrameworkType): string {
   const regional = REGIONAL_SPECS[targetMarket] || REGIONAL_SPECS.Global;
+
+  // Get framework-specific shot guidance if framework is provided
+  let frameworkGuidance = '';
+  if (framework) {
+    const fw = STORYTELLING_FRAMEWORKS[framework];
+    frameworkGuidance = `
+FOLLOW ${fw.name.toUpperCase()} STRUCTURE:
+- Beat 1 Focus: ${fw.structure.hook}
+- Beat 2 Focus: ${fw.structure.demo}
+- Beat 3 Focus: ${fw.structure.proof}
+- Beat 4 Focus: ${fw.structure.cta}
+`;
+  }
 
   return `
 SHOT SEQUENCE (4 BEATS):
-
+${frameworkGuidance}
 BEAT 1 - HOOK (0-6 seconds):
 - Open with attention-grabbing shot that captures the concept: "${userPrompt}"
 - Close-up or dynamic angle of ${product.title}
@@ -295,26 +370,41 @@ BEAT 4 - CALL TO ACTION (18-24 seconds):
 `.trim();
 }
 
-function buildVisualStyle(brandTonePrompt: string | undefined, targetMarket: string, primaryColor: string): string {
+function buildVisualStyle(brandTonePrompt: string | undefined, targetMarket: string, primaryColor: string, theme: any, framework?: FrameworkType): string {
   const baseTone = brandTonePrompt || 'premium, authentic, engaging';
   const regional = REGIONAL_SPECS[targetMarket] || REGIONAL_SPECS.Global;
+
+  // Get framework-specific visual style if framework is provided
+  let frameworkVisualStyle = '';
+  let frameworkEmotionalArc = '';
+  if (framework) {
+    const fw = STORYTELLING_FRAMEWORKS[framework];
+    frameworkVisualStyle = fw.visualStyle;
+    frameworkEmotionalArc = fw.emotionalArc;
+  }
 
   return `
 VISUAL STYLE:
 BRAND TONE: ${baseTone}
+CATEGORY STYLE: ${theme.name} - ${theme.visualStyle}
+${frameworkVisualStyle ? `STORYTELLING STYLE: ${frameworkVisualStyle}` : ''}
+${frameworkEmotionalArc ? `EMOTIONAL ARC: ${frameworkEmotionalArc}` : ''}
+
+CINEMATOGRAPHY:
 - Professional cinematography with cinematic composition
 - ${regional.cultural}
-- Color grading: Warm, inviting tones with ${primaryColor} as brand accent
-- Lighting: Natural and flattering, golden hour quality if outdoors
+- Color grading: ${theme.emotionalTone} with ${primaryColor} as primary brand accent
+- Lighting: Natural and flattering, ${theme.category === 'jewelry' ? 'dramatic' : 'golden hour'} quality
 - Camera work: Smooth, intentional movements (no shaky handheld)
 
 AESTHETIC:
 - High production value, magazine-quality imagery
 - Clean, uncluttered compositions
 - Depth of field for professional look
-- Consistent color palette throughout
+- Consistent color palette: ${theme.colors.primary}, ${theme.colors.accent}
 - Modern, aspirational feel
 - Premium product presentation
+- Category-specific touches: ${theme.description}
 
 PACING:
 - Dynamic opening to stop the scroll

@@ -33,6 +33,7 @@ export function CreatePage() {
   const [targetMarket, setTargetMarket] = useState('Global');
   const [creationMode, setCreationMode] = useState<'automated' | 'manual'>('automated');
   const [manualPrompt, setManualPrompt] = useState('');
+  const [framework, setFramework] = useState<string | undefined>();
   const [customHooks, setCustomHooks] = useState<{ A?: string; B?: string; C?: string }>({});
   const [generatingStatic, setGeneratingStatic] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
@@ -94,9 +95,14 @@ export function CreatePage() {
     setCurrentStep('creation-mode');
   };
 
-  const handleCreationModeComplete = (data: { creationMode: 'automated' | 'manual'; manualPrompt?: string }) => {
+  const handleCreationModeComplete = (data: {
+    creationMode: 'automated' | 'manual';
+    manualPrompt?: string;
+    framework?: string;
+  }) => {
     setCreationMode(data.creationMode);
     setManualPrompt(data.manualPrompt || '');
+    setFramework(data.framework);
     if (data.creationMode === 'automated') {
       setCurrentStep('hooks');
     } else {
@@ -120,6 +126,7 @@ export function CreatePage() {
         targetMarket,
         creationMode,
         manualPrompt: creationMode === 'manual' ? manualPrompt : undefined,
+        framework: creationMode === 'manual' ? framework : undefined,
       });
 
       const variantsResponse = await supabase
@@ -344,7 +351,10 @@ export function CreatePage() {
             initialTargetMarket={targetMarket}
           />
         ) : currentStep === 'creation-mode' ? (
-          <CreationModeStep onComplete={handleCreationModeComplete} />
+          <CreationModeStep
+            productData={productData}
+            onComplete={handleCreationModeComplete}
+          />
         ) : currentStep === 'hooks' ? (
           <div className="space-y-8">
             <div className="text-center mb-8">

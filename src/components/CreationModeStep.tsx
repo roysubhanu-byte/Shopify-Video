@@ -1,13 +1,21 @@
 import { useState } from 'react';
-import { Sparkles, Edit3, AlertCircle } from 'lucide-react';
+import { Sparkles, Edit3, AlertCircle, ArrowRight } from 'lucide-react';
+import { FrameworkSelector } from './FrameworkSelector';
 
 interface CreationModeStepProps {
-  onComplete: (data: { creationMode: 'automated' | 'manual'; manualPrompt?: string }) => void;
+  productData: any;
+  onComplete: (data: {
+    creationMode: 'automated' | 'manual';
+    manualPrompt?: string;
+    framework?: string;
+  }) => void;
 }
 
-export function CreationModeStep({ onComplete }: CreationModeStepProps) {
+export function CreationModeStep({ productData, onComplete }: CreationModeStepProps) {
   const [creationMode, setCreationMode] = useState<'automated' | 'manual'>('automated');
   const [manualPrompt, setManualPrompt] = useState('');
+  const [framework, setFramework] = useState<string | undefined>();
+  const [showFrameworkSelector, setShowFrameworkSelector] = useState(false);
 
   const isManualPromptValid = () => {
     if (creationMode === 'automated') return true;
@@ -20,14 +28,42 @@ export function CreationModeStep({ onComplete }: CreationModeStepProps) {
   };
 
   const handleContinue = () => {
-    if (creationMode === 'manual' && !isManualPromptValid()) {
+    if (creationMode === 'automated') {
+      onComplete({ creationMode });
       return;
     }
 
+    // Manual mode - validate prompt
+    if (!isManualPromptValid()) {
+      return;
+    }
+
+    // Show framework selector if not already selected
+    if (!framework) {
+      setShowFrameworkSelector(true);
+      return;
+    }
+
+    // All validation passed, complete
     onComplete({
       creationMode,
-      manualPrompt: creationMode === 'manual' ? manualPrompt.trim() : undefined,
+      manualPrompt: manualPrompt.trim(),
+      framework,
     });
+  };
+
+  const handleFrameworkSelect = (selectedFramework: string) => {
+    setFramework(selectedFramework);
+  };
+
+  const handleFrameworkConfirm = () => {
+    if (framework) {
+      onComplete({
+        creationMode: 'manual',
+        manualPrompt: manualPrompt.trim(),
+        framework,
+      });
+    }
   };
 
   return (
@@ -185,13 +221,35 @@ export function CreationModeStep({ onComplete }: CreationModeStepProps) {
         </div>
       )}
 
+      {showFrameworkSelector && creationMode === 'manual' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <FrameworkSelector
+            productData={productData}
+            selectedFramework={framework}
+            onSelect={handleFrameworkSelect}
+          />
+        </div>
+      )}
+
       <div className="flex justify-center">
         <button
-          onClick={handleContinue}
+          onClick={showFrameworkSelector && framework ? handleFrameworkConfirm : handleContinue}
           disabled={creationMode === 'manual' && !isManualPromptValid()}
-          className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors text-lg"
+          className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors text-lg flex items-center gap-2"
         >
-          {creationMode === 'automated' ? 'Generate 3 Concepts' : 'Create Video Concept'}
+          {showFrameworkSelector && framework ? (
+            <>
+              Confirm & Continue
+              <ArrowRight size={20} />
+            </>
+          ) : creationMode === 'automated' ? (
+            'Continue to Hooks'
+          ) : (
+            <>
+              Choose Story Framework
+              <ArrowRight size={20} />
+            </>
+          )}
         </button>
       </div>
     </div>

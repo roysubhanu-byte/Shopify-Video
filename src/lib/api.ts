@@ -75,6 +75,7 @@ export async function plan(
     targetMarket?: string;
     creationMode?: 'automated' | 'manual';
     manualPrompt?: string;
+    framework?: string;
   }
 ): Promise<PlanResponse> {
   if (USE_MOCK) {
@@ -137,6 +138,7 @@ export async function plan(
   if (options?.targetMarket) body.targetMarket = options.targetMarket;
   if (options?.creationMode) body.creationMode = options.creationMode;
   if (options?.manualPrompt) body.manualPrompt = options.manualPrompt;
+  if (options?.framework) body.framework = options.framework;
 
   const response = await fetch(`${API_URL}/api/plan`, {
     method: 'POST',

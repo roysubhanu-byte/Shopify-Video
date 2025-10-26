@@ -10,6 +10,7 @@ import webhooksRouter from './routes/webhooks';
 import productsRouter from './routes/products';
 import hooksRouter from './routes/hooks';
 import staticRouter from './routes/static';
+import frameworksRouter from './routes/frameworks';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ app.use(webhooksRouter);
 app.use(productsRouter);
 app.use(hooksRouter);
 app.use(staticRouter);
+app.use(frameworksRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Server error', err, { endpoint: req.path, method: req.method });

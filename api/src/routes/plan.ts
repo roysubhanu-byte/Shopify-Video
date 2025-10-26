@@ -36,6 +36,7 @@ router.post('/api/plan', async (req, res) => {
       manualPrompt,
       brandTonePrompt,
       targetMarket,
+      framework,
     } = req.body;
 
     if (!projectId || !userId) {
@@ -193,7 +194,8 @@ router.post('/api/plan', async (req, res) => {
         creationMode,
         manualPrompt,
         brandTonePrompt,
-        targetMarket
+        targetMarket,
+        framework
       );
 
       // Validate and normalize
@@ -285,7 +287,8 @@ async function buildPlanForConcept(
   creationMode?: 'automated' | 'manual',
   manualPrompt?: string,
   brandTonePrompt?: string,
-  targetMarket?: string
+  targetMarket?: string,
+  framework?: string
 ): Promise<Plan> {
   // If manual mode, compile enhanced prompt
   let enhancedPrompt;
@@ -307,6 +310,7 @@ async function buildPlanForConcept(
       brandColors: brandKit.palette ? Object.values(brandKit.palette) : [],
       brandTonePrompt: brandTonePrompt || brandKit.brand_tone_prompt,
       targetMarket: targetMarket || brandKit.target_market || 'Global',
+      framework: framework as any,
     });
 
     logger.info('Manual prompt compiled', {
