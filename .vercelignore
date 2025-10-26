@@ -1,0 +1,6 @@
+api/**
+packages/**
+supabase/**
+*.sql
+DEPLOYMENT_READY.md
+FINALS_COMPLETE.md
