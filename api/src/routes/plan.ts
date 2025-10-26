@@ -24,7 +24,7 @@ const logger = new Logger({ module: 'plan-route' });
  */
 router.post('/api/plan', async (req, res) => {
   try {
-    const { projectId, userId } = req.body;
+    const { projectId, userId, vertical, overrideHookA, overrideHookB, overrideHookC } = req.body;
 
     if (!projectId || !userId) {
       return res.status(400).json({
@@ -33,7 +33,24 @@ router.post('/api/plan', async (req, res) => {
       });
     }
 
-    logger.info('Generating plans for project', { projectId, userId });
+    const hookOverrides = [overrideHookA, overrideHookB, overrideHookC];
+
+    for (let i = 0; i < hookOverrides.length; i++) {
+      const override = hookOverrides[i];
+      if (override && typeof override === 'string') {
+        const wordCount = override.trim().split(/\s+/).filter(Boolean).length;
+        if (wordCount > 6) {
+          return res.status(400).json({
+            error: `Hook override for concept ${String.fromCharCode(65 + i)} exceeds 6 words`,
+            provided: override,
+            wordCount,
+            maxWords: 6,
+          });
+        }
+      }
+    }
+
+    logger.info('Generating plans for project', { projectId, userId, vertical, hasOverrides: hookOverrides.some(h => !!h) });
 
     // Fetch project data
     const { data: project, error: projectError } = await supabase
@@ -143,7 +160,13 @@ router.post('/api/plan', async (req, res) => {
       );
 
       const selectedHook = recommendedHooks[0];
-      const hookText = selectedHook?.filled_text || `Check out ${product.title}`;
+      let hookText = selectedHook?.filled_text || `Check out ${product.title}`;
+
+      const hookOverride = hookOverrides[i];
+      if (hookOverride && typeof hookOverride === 'string') {
+        hookText = hookOverride;
+        logger.info('Applying hook override', { conceptLabel, override: hookOverride });
+      }
 
       // Build plan
       const plan = await buildPlanForConcept(

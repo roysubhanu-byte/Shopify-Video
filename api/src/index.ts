@@ -7,6 +7,8 @@ import healthRouter from './routes/health';
 import planRouter from './routes/plan';
 import renderRouter from './routes/render';
 import webhooksRouter from './routes/webhooks';
+import productsRouter from './routes/products';
+import hooksRouter from './routes/hooks';
 
 dotenv.config();
 
@@ -36,6 +38,8 @@ app.use(ingestRouter);
 app.use(planRouter);
 app.use(renderRouter);
 app.use(webhooksRouter);
+app.use(productsRouter);
+app.use(hooksRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Server error', err, { endpoint: req.path, method: req.method });
@@ -56,9 +60,12 @@ async function start() {
         'GET  /healthz                  - Health check',
         'POST /api/ingest/url           - Paste URL → get 3 concepts',
         'GET  /api/ingest/products      - List user products',
-        'POST /api/plan                 - Generate validated plans',
+        'GET  /api/products             - Get products from Shopify or generic site',
+        'GET  /api/hooks                - Get trending hook templates',
+        'POST /api/plan                 - Generate validated plans (with hook overrides)',
         'POST /api/render/previews      - Queue preview renders',
         'POST /api/render/finals        - Queue final renders',
+        'POST /api/render/swap-hook     - Generate preview with new hook',
         'POST /webhooks/veo             - VEO3 callback handler',
       ],
     });
