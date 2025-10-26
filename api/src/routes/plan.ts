@@ -14,6 +14,7 @@ import {
 import { getRecommendedHooks } from '../lib/hooks-service';
 import { getProductAssets, getSelectedAssets } from '../lib/asset-analyzer';
 import { buildConceptPrompts, extractHookVariables } from '../lib/veo3-prompt-builder';
+import { compileManualPrompt, validateManualPrompt } from '../lib/manual-prompt-compiler';
 
 const router = Router();
 const logger = new Logger({ module: 'plan-route' });
@@ -24,7 +25,18 @@ const logger = new Logger({ module: 'plan-route' });
  */
 router.post('/api/plan', async (req, res) => {
   try {
-    const { projectId, userId, vertical, overrideHookA, overrideHookB, overrideHookC } = req.body;
+    const {
+      projectId,
+      userId,
+      vertical,
+      overrideHookA,
+      overrideHookB,
+      overrideHookC,
+      creationMode,
+      manualPrompt,
+      brandTonePrompt,
+      targetMarket,
+    } = req.body;
 
     if (!projectId || !userId) {
       return res.status(400).json({
@@ -177,7 +189,11 @@ router.post('/api/plan', async (req, res) => {
         selectedAssets,
         hookText,
         selectedHook?.id,
-        seed
+        seed,
+        creationMode,
+        manualPrompt,
+        brandTonePrompt,
+        targetMarket
       );
 
       // Validate and normalize
@@ -265,8 +281,40 @@ async function buildPlanForConcept(
   selectedAssets: any[],
   hookText: string,
   hookId: string | undefined,
-  seed: number
+  seed: number,
+  creationMode?: 'automated' | 'manual',
+  manualPrompt?: string,
+  brandTonePrompt?: string,
+  targetMarket?: string
 ): Promise<Plan> {
+  // If manual mode, compile enhanced prompt
+  let enhancedPrompt;
+  if (creationMode === 'manual' && manualPrompt) {
+    enhancedPrompt = compileManualPrompt({
+      userPrompt: manualPrompt,
+      product: {
+        url: product.url,
+        title: product.title,
+        description: product.description,
+        bullets: product.bullets || [],
+        price: product.price,
+        currency: product.currency || 'USD',
+        images: product.images || [],
+        brandName: product.brand_name,
+        brandColors: product.brand_colors || [],
+      },
+      brandName: brandKit.brand_name,
+      brandColors: brandKit.palette ? Object.values(brandKit.palette) : [],
+      brandTonePrompt: brandTonePrompt || brandKit.brand_tone_prompt,
+      targetMarket: targetMarket || brandKit.target_market || 'Global',
+    });
+
+    logger.info('Manual prompt compiled', {
+      variantId,
+      userPrompt: manualPrompt.substring(0, 50),
+      enhancedLength: enhancedPrompt.fullPrompt.length,
+    });
+  }
   const planId = uuidv4();
 
   // Map selected assets to AssetRef format
@@ -285,7 +333,8 @@ async function buildPlanForConcept(
     brandKit,
     assetRefs,
     hookText,
-    seed
+    seed,
+    enhancedPrompt
   );
 
   // Build plan
@@ -330,12 +379,17 @@ function buildBeatsForConcept(
   brandKit: any,
   assetRefs: AssetRef[],
   hookText: string,
-  seed: number
+  seed: number,
+  enhancedPrompt?: any
 ): Beat[] {
   const beats: Beat[] = [];
   const beatDuration = 6;
 
   // Beat 1: Hook
+  const hookPrompt = enhancedPrompt
+    ? `${enhancedPrompt.fullPrompt}\n\nFocus on hook/opening scene (0-6 seconds).`
+    : `Create a vertical 9:16 video opening. ${hookText}. Show ${product.title} prominently. Use ${brandKit.palette.primary} as brand color. ${getVisualStyle(conceptType, 'hook')}. High energy, attention-grabbing.`;
+
   beats.push({
     id: uuidv4(),
     type: 'hook',
@@ -344,7 +398,7 @@ function buildBeatsForConcept(
     endTime: 6,
     duration: beatDuration,
     assetRefs: [assetRefs[0]],
-    visualStyle: getVisualStyle(conceptType, 'hook'),
+    visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'hook'),
     cameraMovement: 'dynamic',
     overlays: [
       {
@@ -358,13 +412,17 @@ function buildBeatsForConcept(
         animation: 'fade',
       },
     ],
-    prompt: `Create a vertical 9:16 video opening. ${hookText}. Show ${product.title} prominently. Use ${brandKit.palette.primary} as brand color. ${getVisualStyle(conceptType, 'hook')}. High energy, attention-grabbing.`,
+    prompt: hookPrompt,
     seed,
     musicVolume: 0.3,
   });
 
   // Beat 2: Demo
   const feature1 = product.bullets?.[0] || 'Premium quality and design';
+  const demoPrompt = enhancedPrompt
+    ? `${enhancedPrompt.fullPrompt}\n\nFocus on demonstration/product showcase (6-12 seconds). ${enhancedPrompt.shotSequence}`
+    : `Continue from previous scene. Showcase ${feature1}. Show ${product.title} in action. Maintain ${brandKit.palette.primary} brand color. ${getVisualStyle(conceptType, 'demo')}.`;
+
   beats.push({
     id: uuidv4(),
     type: 'demo',
@@ -373,7 +431,7 @@ function buildBeatsForConcept(
     endTime: 12,
     duration: beatDuration,
     assetRefs: [assetRefs[1] || assetRefs[0]],
-    visualStyle: getVisualStyle(conceptType, 'demo'),
+    visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'demo'),
     cameraMovement: 'pan',
     voiceOver: {
       text: feature1.substring(0, 100),
@@ -395,13 +453,17 @@ function buildBeatsForConcept(
         animation: 'slide_up',
       },
     ],
-    prompt: `Continue from previous scene. Showcase ${feature1}. Show ${product.title} in action. Maintain ${brandKit.palette.primary} brand color. ${getVisualStyle(conceptType, 'demo')}.`,
+    prompt: demoPrompt,
     seed: seed + 1,
     musicVolume: 0.3,
   });
 
   // Beat 3: Proof
   const feature2 = product.bullets?.[1] || 'Outstanding results you can see';
+  const proofPrompt = enhancedPrompt
+    ? `${enhancedPrompt.fullPrompt}\n\nFocus on emotional response/lifestyle context (12-18 seconds). ${enhancedPrompt.characterConsistency}`
+    : `Build on previous scene. Show ${feature2}. ${product.title} in aspirational lifestyle context. ${getVisualStyle(conceptType, 'proof')}.`;
+
   beats.push({
     id: uuidv4(),
     type: 'proof',
@@ -410,7 +472,7 @@ function buildBeatsForConcept(
     endTime: 18,
     duration: beatDuration,
     assetRefs: [assetRefs[2] || assetRefs[1] || assetRefs[0]],
-    visualStyle: getVisualStyle(conceptType, 'proof'),
+    visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'proof'),
     cameraMovement: 'zoom',
     voiceOver: {
       text: feature2.substring(0, 100),
@@ -432,12 +494,16 @@ function buildBeatsForConcept(
         animation: 'fade',
       },
     ],
-    prompt: `Build on previous scene. Show ${feature2}. ${product.title} in aspirational lifestyle context. ${getVisualStyle(conceptType, 'proof')}.`,
+    prompt: proofPrompt,
     seed: seed + 2,
     musicVolume: 0.3,
   });
 
   // Beat 4: CTA
+  const ctaPrompt = enhancedPrompt
+    ? `${enhancedPrompt.fullPrompt}\n\nFocus on product hero shot with call-to-action (18-24 seconds). ${enhancedPrompt.productSpecificity}`
+    : `Final scene. ${product.title} hero shot. Clean composition with space for CTA text. Brand colors ${brandKit.palette.primary}. Confident, complete feeling.`;
+
   beats.push({
     id: uuidv4(),
     type: 'cta',
@@ -446,7 +512,7 @@ function buildBeatsForConcept(
     endTime: 24,
     duration: beatDuration,
     assetRefs: [assetRefs[3] || assetRefs[2] || assetRefs[0]],
-    visualStyle: getVisualStyle(conceptType, 'cta'),
+    visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'cta'),
     cameraMovement: 'static',
     overlays: [
       {
@@ -461,7 +527,7 @@ function buildBeatsForConcept(
         animation: 'zoom',
       },
     ],
-    prompt: `Final scene. ${product.title} hero shot. Clean composition with space for CTA text. Brand colors ${brandKit.palette.primary}. Confident, complete feeling.`,
+    prompt: ctaPrompt,
     seed: seed + 3,
     musicVolume: 0.3,
   });

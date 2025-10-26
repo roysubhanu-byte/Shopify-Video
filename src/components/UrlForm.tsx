@@ -3,7 +3,7 @@ import { Link2, Loader2, Palette } from 'lucide-react';
 import { i18n } from '../lib/i18n';
 
 interface UrlFormProps {
-  onSubmit: (url: string, vertical: string) => void;
+  onSubmit: (url: string) => void;
   isLoading?: boolean;
   productData?: {
     title: string;
@@ -19,12 +19,11 @@ interface UrlFormProps {
 
 export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: UrlFormProps) {
   const [url, setUrl] = useState('');
-  const [vertical, setVertical] = useState('beauty');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (url.trim()) {
-      onSubmit(url.trim(), vertical);
+      onSubmit(url.trim());
     }
   };
 
@@ -40,34 +39,11 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder={`Paste your ${i18n.labels.shopUrl}...`}
+              placeholder="Paste your Shopify store URL (e.g., https://yourstore.myshopify.com)"
               className="w-full pl-12 pr-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={isLoading}
               required
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              {i18n.labels.vertical}
-            </label>
-            <select
-              value={vertical}
-              onChange={(e) => setVertical(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isLoading}
-            >
-              <option value="beauty">Beauty & Cosmetics</option>
-              <option value="fashion">Fashion & Apparel</option>
-              <option value="electronics">Electronics & Gadgets</option>
-              <option value="home">Home & Living</option>
-              <option value="health">Health & Wellness</option>
-              <option value="food">Food & Beverage</option>
-              <option value="sports">Sports & Fitness</option>
-              <option value="toys">Toys & Games</option>
-              <option value="jewelry">Jewelry & Accessories</option>
-              <option value="other">Other</option>
-            </select>
           </div>
         </div>
 
@@ -79,10 +55,10 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
           {isLoading ? (
             <>
               <Loader2 size={20} className="animate-spin" />
-              {i18n.messages.ingesting}
+              Loading catalog...
             </>
           ) : (
-            i18n.cta.generateHooks
+            'Load Store Catalog'
           )}
         </button>
       </form>
