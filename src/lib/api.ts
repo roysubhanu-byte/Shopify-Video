@@ -65,7 +65,10 @@ export async function ingest(url: string): Promise<IngestResponse> {
   return response.json();
 }
 
-export async function plan(projectId: string): Promise<PlanResponse> {
+export async function plan(
+  projectId: string,
+  customHooks?: { A?: string; B?: string; C?: string }
+): Promise<PlanResponse> {
   if (USE_MOCK) {
     await sleep(1500);
     return {
@@ -74,7 +77,7 @@ export async function plan(projectId: string): Promise<PlanResponse> {
         {
           id: `var_a_${Date.now()}`,
           label: 'A',
-          hook: "POV: You finally found headphones that don't hurt after 2 hours",
+          hook: customHooks?.A || "POV: You finally found headphones that don't hurt after 2 hours",
           conceptType: 'POV',
           seed: 12345,
           beats: [
@@ -87,7 +90,7 @@ export async function plan(projectId: string): Promise<PlanResponse> {
         {
           id: `var_b_${Date.now()}`,
           label: 'B',
-          hook: 'What if headphones could actually last all day?',
+          hook: customHooks?.B || 'What if headphones could actually last all day?',
           conceptType: 'Question',
           seed: 67890,
           beats: [
@@ -100,7 +103,7 @@ export async function plan(projectId: string): Promise<PlanResponse> {
         {
           id: `var_c_${Date.now()}`,
           label: 'C',
-          hook: 'Before: Noise everywhere. After: Pure focus.',
+          hook: customHooks?.C || 'Before: Noise everywhere. After: Pure focus.',
           conceptType: 'Before-After',
           seed: 11111,
           beats: [
@@ -115,10 +118,18 @@ export async function plan(projectId: string): Promise<PlanResponse> {
   }
 
   const headers = await getAuthHeaders();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const body: any = { projectId, userId: user?.id };
+
+  if (customHooks?.A) body.overrideHookA = customHooks.A;
+  if (customHooks?.B) body.overrideHookB = customHooks.B;
+  if (customHooks?.C) body.overrideHookC = customHooks.C;
+
   const response = await fetch(`${API_URL}/api/plan`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ projectId }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
