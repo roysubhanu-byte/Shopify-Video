@@ -94,17 +94,22 @@ export function buildConceptPrompts(
   product: ProductData,
   brandKit: BrandKit,
   selectedImageUrls: string[],
-  hookText: string
+  hookText: string,
+  brandTonePrompt?: string,
+  targetMarket?: string
 ): BeatPrompt[] {
   logger.info('Building prompts for concept', {
     conceptId: concept.id,
     conceptType: concept.hookPattern,
     hookText,
     imageCount: selectedImageUrls.length,
+    brandTone: brandTonePrompt ? 'custom' : 'default',
+    targetMarket: targetMarket || 'Global',
   });
 
   const primaryColor = brandKit.palette.primary;
-  const styleDirective = getStyleDirective(concept, brandKit);
+  const styleDirective = getStyleDirective(concept, brandKit, brandTonePrompt, targetMarket);
+  const productSpecificity = getProductSpecificity(product.title);
 
   // Ensure we have at least 4 images (repeat if necessary)
   const images = [...selectedImageUrls];
@@ -120,7 +125,7 @@ export function buildConceptPrompts(
     beatType: 'hook',
     duration: 6,
     referenceImageUrls: [images[0]],
-    prompt: `Create a vertical 9:16 video opening scene. ${hookText}. Show ${product.title} prominently in an attention-grabbing way. Use ${primaryColor} as the primary brand accent color throughout. ${styleDirective}. High energy start that stops the scroll. Smooth camera movement. Professional cinematic lighting. The scene should feel dynamic and engaging from the first frame. Reference product styling and composition from the provided image.`,
+    prompt: `Create a vertical 9:16 video opening scene. ${hookText}. ${productSpecificity}. Show ${product.title} prominently in an attention-grabbing way. Use ${primaryColor} as the primary brand accent color throughout. ${styleDirective}. High energy start that stops the scroll. Smooth camera movement. Professional cinematic lighting. The scene should feel dynamic and engaging from the first frame. Reference product styling and composition from the provided image.`,
   });
 
   // BEAT 2: Demo Part 1 (3-4 seconds)
@@ -166,7 +171,7 @@ export function buildConceptPrompts(
 /**
  * Get style directive based on concept and brand
  */
-function getStyleDirective(concept: Concept, brandKit: BrandKit): string {
+function getStyleDirective(concept: Concept, brandKit: BrandKit, brandTonePrompt?: string, targetMarket?: string): string {
   const baseStyle = 'Cinematic composition, professional lighting, smooth camera movements, high production value';
 
   const verticalStyle =
@@ -176,10 +181,54 @@ function getStyleDirective(concept: Concept, brandKit: BrandKit): string {
       ? 'Premium product photography style, aspirational lifestyle imagery, magazine quality'
       : 'Motivational visual language, personal transformation vibe, inspiring atmosphere';
 
-  // Concept-specific style from concept-factory
   const conceptStyle = concept.style;
 
-  return `${baseStyle}. ${verticalStyle}. ${conceptStyle}. Shot in vertical 9:16 format optimized for TikTok and Instagram Reels.`;
+  const brandTone = brandTonePrompt || brandKit.style || 'premium, authentic, engaging';
+
+  const regionalStyle = getRegionalStyle(targetMarket || 'Global');
+
+  return `${baseStyle}. ${verticalStyle}. ${conceptStyle}. Brand tone: ${brandTone}. ${regionalStyle}. Shot in vertical 9:16 format optimized for TikTok and Instagram Reels.`;
+}
+
+/**
+ * Get regional style based on target market
+ */
+function getRegionalStyle(targetMarket: string): string {
+  const regionalStyles: Record<string, string> = {
+    India: 'Urban Indian setting, contemporary Indian lifestyle, relatable to Indian audience with authentic representation',
+    USA: 'American urban/suburban setting, diverse modern American lifestyle',
+    'Middle East': 'Modern Middle Eastern urban setting, modest contemporary fashion, respectful cultural representation',
+    Europe: 'European urban setting, stylish European lifestyle aesthetic',
+    Global: 'Universal modern urban setting, globally relatable lifestyle',
+  };
+
+  return regionalStyles[targetMarket] || regionalStyles.Global;
+}
+
+/**
+ * Get product-specific requirements
+ */
+function getProductSpecificity(productTitle: string): string {
+  const titleLower = productTitle.toLowerCase();
+
+  const specificityMap: Record<string, string> = {
+    gelato: 'Italian gelato in authentic glass cup with visible creamy texture, NOT soft serve ice cream, NOT ice cream cone',
+    'ice cream': 'Premium ice cream properly served, show texture and quality',
+    sneakers: 'Athletic sneakers on feet in action, NOT dress shoes, NOT boots',
+    laptop: 'Modern laptop with visible screen, NOT tablet, NOT desktop',
+    skincare: 'Skincare serum bottle with dropper, NOT cream jar',
+    phone: 'Smartphone in hand with screen visible, NOT tablet',
+    headphones: 'Wireless headphones being worn, show comfort and quality',
+    watch: 'Wristwatch on wrist in lifestyle context, NOT laying flat',
+  };
+
+  for (const [key, specificity] of Object.entries(specificityMap)) {
+    if (titleLower.includes(key)) {
+      return specificity;
+    }
+  }
+
+  return `Show ${productTitle} accurately and prominently`;
 }
 
 /**

@@ -67,7 +67,15 @@ export async function ingest(url: string): Promise<IngestResponse> {
 
 export async function plan(
   projectId: string,
-  customHooks?: { A?: string; B?: string; C?: string }
+  options?: {
+    A?: string;
+    B?: string;
+    C?: string;
+    brandTonePrompt?: string;
+    targetMarket?: string;
+    creationMode?: 'automated' | 'manual';
+    manualPrompt?: string;
+  }
 ): Promise<PlanResponse> {
   if (USE_MOCK) {
     await sleep(1500);
@@ -77,7 +85,7 @@ export async function plan(
         {
           id: `var_a_${Date.now()}`,
           label: 'A',
-          hook: customHooks?.A || "POV: You finally found headphones that don't hurt after 2 hours",
+          hook: options?.A || "POV: You finally found headphones that don't hurt after 2 hours",
           conceptType: 'POV',
           seed: 12345,
           beats: [
@@ -90,7 +98,7 @@ export async function plan(
         {
           id: `var_b_${Date.now()}`,
           label: 'B',
-          hook: customHooks?.B || 'What if headphones could actually last all day?',
+          hook: options?.B || 'What if headphones could actually last all day?',
           conceptType: 'Question',
           seed: 67890,
           beats: [
@@ -103,7 +111,7 @@ export async function plan(
         {
           id: `var_c_${Date.now()}`,
           label: 'C',
-          hook: customHooks?.C || 'Before: Noise everywhere. After: Pure focus.',
+          hook: options?.C || 'Before: Noise everywhere. After: Pure focus.',
           conceptType: 'Before-After',
           seed: 11111,
           beats: [
@@ -122,9 +130,13 @@ export async function plan(
 
   const body: any = { projectId, userId: user?.id };
 
-  if (customHooks?.A) body.overrideHookA = customHooks.A;
-  if (customHooks?.B) body.overrideHookB = customHooks.B;
-  if (customHooks?.C) body.overrideHookC = customHooks.C;
+  if (options?.A) body.overrideHookA = options.A;
+  if (options?.B) body.overrideHookB = options.B;
+  if (options?.C) body.overrideHookC = options.C;
+  if (options?.brandTonePrompt) body.brandTonePrompt = options.brandTonePrompt;
+  if (options?.targetMarket) body.targetMarket = options.targetMarket;
+  if (options?.creationMode) body.creationMode = options.creationMode;
+  if (options?.manualPrompt) body.manualPrompt = options.manualPrompt;
 
   const response = await fetch(`${API_URL}/api/plan`, {
     method: 'POST',

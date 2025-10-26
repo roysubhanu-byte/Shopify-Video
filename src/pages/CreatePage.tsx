@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TopNav } from '../components/TopNav';
 import { UrlForm } from '../components/UrlForm';
-import { ConceptTile } from '../components/ConceptTile';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { ProductPickerModal } from '../components/ProductPickerModal';
+import { BrandGuidelinesStep } from '../components/BrandGuidelinesStep';
+import { CreationModeStep } from '../components/CreationModeStep';
 import { HooksPanel } from '../components/HooksPanel';
 import { ModeTabs } from '../components/ModeTabs';
 import { ToastContainer } from '../components/Toast';
@@ -15,16 +16,23 @@ import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
 import { i18n } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
 
+type FlowStep = 'url' | 'brand-guidelines' | 'creation-mode' | 'hooks' | 'concepts';
+
 export function CreatePage() {
-  const { credits } = useUserCredits();
+  const credits = useUserCredits();
   const navigate = useNavigate();
 
+  const [currentStep, setCurrentStep] = useState<FlowStep>('url');
   const [isIngesting, setIsIngesting] = useState(false);
   const [isPlanning, setIsPlanning] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [pendingUrl, setPendingUrl] = useState<{ url: string; vertical: string } | null>(null);
+  const [brandTonePrompt, setBrandTonePrompt] = useState('');
+  const [targetMarket, setTargetMarket] = useState('Global');
+  const [creationMode, setCreationMode] = useState<'automated' | 'manual'>('automated');
+  const [manualPrompt, setManualPrompt] = useState('');
   const [customHooks, setCustomHooks] = useState<{ A?: string; B?: string; C?: string }>({});
   const [generatingStatic, setGeneratingStatic] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
@@ -64,12 +72,13 @@ export function CreatePage() {
     await processIngest(pendingUrl.url, pendingUrl.vertical, product);
   };
 
-  const processIngest = async (url: string, vertical: string, selectedProduct: any) => {
+  const processIngest = async (url: string, _vertical: string, _selectedProduct: any) => {
     setIsIngesting(true);
 
     try {
       const ingestData = await ingest(url);
       setProjectData(ingestData);
+      setCurrentStep('brand-guidelines');
     } catch (error) {
       console.error('Error:', error);
       alert(i18n.messages.error);
@@ -79,14 +88,48 @@ export function CreatePage() {
     }
   };
 
+  const handleBrandGuidelinesComplete = (data: { brandTonePrompt: string; targetMarket: string }) => {
+    setBrandTonePrompt(data.brandTonePrompt);
+    setTargetMarket(data.targetMarket);
+    setCurrentStep('creation-mode');
+  };
+
+  const handleCreationModeComplete = (data: { creationMode: 'automated' | 'manual'; manualPrompt?: string }) => {
+    setCreationMode(data.creationMode);
+    setManualPrompt(data.manualPrompt || '');
+    if (data.creationMode === 'automated') {
+      setCurrentStep('hooks');
+    } else {
+      setCurrentStep('concepts');
+      handleGeneratePlans();
+    }
+  };
+
   const handleGeneratePlans = async () => {
     if (!projectId) return;
 
     setIsPlanning(true);
+    setCurrentStep('concepts');
 
     try {
-      const planData = await plan(projectId, customHooks);
-      setVariants(planData.variants);
+      const planData = await plan(projectId, {
+        A: customHooks.A,
+        B: customHooks.B,
+        C: customHooks.C,
+        brandTonePrompt,
+        targetMarket,
+        creationMode,
+        manualPrompt: creationMode === 'manual' ? manualPrompt : undefined,
+      });
+
+      const variantsResponse = await supabase
+        .from('variants')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (variantsResponse.data) {
+        setVariants(variantsResponse.data as any);
+      }
     } catch (error) {
       console.error('Error:', error);
       alert(i18n.messages.error);
@@ -202,19 +245,81 @@ export function CreatePage() {
     const render = renders.get(v.id);
     return {
       id: v.id,
-      tag: v.conceptTag,
-      type: v.conceptType,
-      hook: v.hook,
+      tag: (v as any).concept_tag || (v as any).conceptTag,
+      type: (v as any).concept_type || (v as any).conceptType,
+      hook: v.hook || '',
       videoUrl: render?.videoUrl,
-      staticImages: v.staticImages,
+      staticImages: (v as any).static_images || (v as any).staticImages || [],
     };
   });
+
+  const renderStepIndicator = () => {
+    const steps = [
+      { id: 'url', label: 'Product' },
+      { id: 'brand-guidelines', label: 'Brand' },
+      { id: 'creation-mode', label: 'Mode' },
+      ...(creationMode === 'automated' ? [{ id: 'hooks', label: 'Hooks' }] : []),
+      { id: 'concepts', label: 'Create' },
+    ];
+
+    const currentIndex = steps.findIndex(s => s.id === currentStep);
+
+    return (
+      <div className="flex items-center justify-center gap-4 mb-12">
+        {steps.map((step, index) => (
+          <div key={step.id} className="flex items-center">
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                index < currentIndex
+                  ? 'bg-green-500 text-white'
+                  : index === currentIndex
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-slate-700 text-slate-400'
+              }`}>
+                {index < currentIndex ? '✓' : index + 1}
+              </div>
+              <span className={`text-sm font-medium ${
+                index <= currentIndex ? 'text-white' : 'text-slate-500'
+              }`}>
+                {step.label}
+              </span>
+            </div>
+            {index < steps.length - 1 && (
+              <div className={`w-12 h-0.5 mx-2 ${
+                index < currentIndex ? 'bg-green-500' : 'bg-slate-700'
+              }`} />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-950">
       <TopNav />
       <div className="max-w-7xl mx-auto px-6 py-12">
-        {!projectId ? (
+        {currentStep !== 'url' && projectId && (
+          <div className="mb-8">
+            <button
+              onClick={() => {
+                if (currentStep === 'brand-guidelines') setCurrentStep('url');
+                else if (currentStep === 'creation-mode') setCurrentStep('brand-guidelines');
+                else if (currentStep === 'hooks') setCurrentStep('creation-mode');
+                else if (currentStep === 'concepts' && creationMode === 'automated') setCurrentStep('hooks');
+                else if (currentStep === 'concepts' && creationMode === 'manual') setCurrentStep('creation-mode');
+              }}
+              className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+            >
+              <ChevronLeft size={20} />
+              Back
+            </button>
+          </div>
+        )}
+
+        {projectId && currentStep !== 'url' && renderStepIndicator()}
+
+        {currentStep === 'url' ? (
           <div className="flex flex-col items-center justify-center min-h-[70vh]">
             <div className="text-center mb-12 max-w-3xl">
               <h1 className="text-5xl font-bold text-white mb-4">
@@ -222,7 +327,7 @@ export function CreatePage() {
               </h1>
 
               <p className="text-xl text-slate-400 mb-8">
-                Paste your product URL and get 3 distinct video concepts with trending hooks
+                Paste your product URL and get AI-generated video concepts with intelligent prompts
               </p>
             </div>
 
@@ -232,7 +337,15 @@ export function CreatePage() {
               productData={productData}
             />
           </div>
-        ) : variants.length === 0 ? (
+        ) : currentStep === 'brand-guidelines' ? (
+          <BrandGuidelinesStep
+            onComplete={handleBrandGuidelinesComplete}
+            initialBrandTone={brandTonePrompt}
+            initialTargetMarket={targetMarket}
+          />
+        ) : currentStep === 'creation-mode' ? (
+          <CreationModeStep onComplete={handleCreationModeComplete} />
+        ) : currentStep === 'hooks' ? (
           <div className="space-y-8">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-white mb-2">
@@ -244,7 +357,7 @@ export function CreatePage() {
             </div>
 
             <HooksPanel
-              vertical={productData?.vertical || 'general'}
+              vertical={(productData as any)?.vertical || 'general'}
               onCustomHooksChange={setCustomHooks}
             />
 
@@ -258,62 +371,73 @@ export function CreatePage() {
                   'Generating Plans...'
                 ) : (
                   <>
-                    Generate Hooks
+                    Generate 3 Concepts
                     <ArrowRight size={20} />
                   </>
                 )}
               </button>
             </div>
           </div>
-        ) : (
+        ) : currentStep === 'concepts' ? (
           <div>
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold text-white mb-2">
-                Your 3 Video Concepts
-              </h2>
-              <p className="text-slate-400">
-                Choose between video previews or instant static images
-              </p>
-            </div>
+            {isPlanning ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-slate-400">
+                  {creationMode === 'manual' ? 'Creating your custom video concept...' : 'Generating 3 concepts...'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-8">
+                  <h2 className="text-3xl font-bold text-white mb-2">
+                    {creationMode === 'manual' ? 'Your Video Concept' : 'Your 3 Video Concepts'}
+                  </h2>
+                  <p className="text-slate-400">
+                    Choose between video previews or instant static images
+                  </p>
+                </div>
 
-            <ModeTabs
-              conceptsData={conceptsData}
-              onGenerateStatic={handleGenerateStatic}
-              generatingStatic={generatingStatic}
-              creditsEnabled={typeof credits === 'number'}
-            />
+                <ModeTabs
+                  conceptsData={conceptsData}
+                  onGenerateStatic={handleGenerateStatic}
+                  generatingStatic={generatingStatic}
+                  creditsEnabled={typeof credits === 'number'}
+                />
 
-            {!hasValidRenders && (
-              <div className="flex justify-center mt-8">
-                <button
-                  onClick={handleCreatePreviews}
-                  disabled={isRendering}
-                  className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
-                >
-                  {isRendering ? (
-                    i18n.messages.rendering
-                  ) : (
-                    <>
-                      {i18n.cta.create3}
+                {!hasValidRenders && (
+                  <div className="flex justify-center mt-8">
+                    <button
+                      onClick={handleCreatePreviews}
+                      disabled={isRendering}
+                      className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
+                    >
+                      {isRendering ? (
+                        i18n.messages.rendering
+                      ) : (
+                        <>
+                          {i18n.cta.create3}
+                          <ArrowRight size={20} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {hasValidRenders && (
+                  <div className="flex justify-center mt-8">
+                    <button
+                      className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
+                    >
+                      Create Final Videos (3 credits)
                       <ArrowRight size={20} />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {hasValidRenders && (
-              <div className="flex justify-center mt-8">
-                <button
-                  className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
-                >
-                  Create Final Videos (3 credits)
-                  <ArrowRight size={20} />
-                </button>
-              </div>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <ProductPickerModal
