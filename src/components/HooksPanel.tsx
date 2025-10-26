@@ -36,15 +36,34 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
   }, [customHookA, customHookB, customHookC, onCustomHooksChange]);
 
   const fetchHooks = async () => {
+    const defaultHooks: Hook[] = [
+      { template: 'POV', example: 'You finally found the perfect solution', vertical: 'general', performance: 0.85 },
+      { template: 'Question', example: 'What if this changed everything?', vertical: 'general', performance: 0.87 },
+      { template: 'Before/After', example: 'Before: chaos. After: calm', vertical: 'general', performance: 0.93 },
+      { template: 'POV', example: 'Your morning routine got easier', vertical: 'lifestyle', performance: 0.91 },
+      { template: 'Stop doing', example: 'Stop wasting money on this', vertical: 'general', performance: 0.80 },
+      { template: 'Did you know', example: 'Most people skip this step', vertical: 'general', performance: 0.77 },
+      { template: 'This is your sign', example: 'Try something that actually works', vertical: 'general', performance: 0.75 },
+      { template: 'The secret to', example: 'Better results in half the time', vertical: 'general', performance: 0.88 },
+      { template: 'If you struggle with', example: 'This changes everything', vertical: 'general', performance: 0.82 },
+      { template: 'Everyone is obsessed', example: 'This simple upgrade', vertical: 'lifestyle', performance: 0.81 },
+    ];
+
     setLoading(true);
     try {
       const response = await fetch(`/api/hooks?vertical=${vertical}&limit=10`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch hooks');
+      }
       const data = await response.json();
-      if (data.hooks) {
+      if (data.hooks && data.hooks.length > 0) {
         setHooks(data.hooks);
+      } else {
+        setHooks(defaultHooks);
       }
     } catch (error) {
-      console.error('Failed to fetch hooks:', error);
+      console.error('Failed to fetch hooks, using defaults:', error);
+      setHooks(defaultHooks);
     } finally {
       setLoading(false);
     }

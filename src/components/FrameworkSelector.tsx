@@ -27,6 +27,60 @@ export function FrameworkSelector({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const defaultFrameworks: Framework[] = [
+      {
+        id: 'problem-solution',
+        name: 'Problem-Solution',
+        description: 'Highlight a common problem and present your product as the solution',
+        bestFor: ['utility', 'tools', 'apps'],
+        examplePrompt: 'Show frustrated person dealing with common problem, then reveal product solving it effortlessly',
+        emotionalArc: 'Frustration → Relief → Satisfaction',
+        recommended: true,
+      },
+      {
+        id: 'before-after',
+        name: 'Before-After',
+        description: 'Show dramatic transformation using your product',
+        bestFor: ['beauty', 'fitness', 'home'],
+        examplePrompt: 'Split screen showing before state, then after using product with visible improvement',
+        emotionalArc: 'Dissatisfaction → Transformation → Pride',
+        recommended: true,
+      },
+      {
+        id: 'social-proof',
+        name: 'Social Proof',
+        description: 'Feature real customers and testimonials',
+        bestFor: ['lifestyle', 'fashion', 'tech'],
+        examplePrompt: 'Happy customers using product in real situations, with authentic reactions',
+        emotionalArc: 'Skepticism → Trust → Belonging',
+        recommended: true,
+      },
+      {
+        id: 'how-it-works',
+        name: 'How It Works',
+        description: 'Demonstrate the product in action with clear steps',
+        bestFor: ['gadgets', 'tools', 'kitchen'],
+        examplePrompt: 'Step-by-step demonstration showing product features and benefits',
+        emotionalArc: 'Curiosity → Understanding → Confidence',
+      },
+      {
+        id: 'lifestyle-integration',
+        name: 'Lifestyle Integration',
+        description: 'Show product seamlessly fitting into daily life',
+        bestFor: ['fashion', 'accessories', 'wellness'],
+        examplePrompt: 'Follow character through their day, naturally using product in various scenarios',
+        emotionalArc: 'Aspiration → Connection → Desire',
+      },
+      {
+        id: 'comparison',
+        name: 'Comparison',
+        description: 'Compare your product against alternatives',
+        bestFor: ['tech', 'tools', 'services'],
+        examplePrompt: 'Side-by-side comparison showing your product outperforming competitors',
+        emotionalArc: 'Doubt → Analysis → Conviction',
+      },
+    ];
+
     const fetchFrameworks = async () => {
       try {
         const response = await fetch('/api/frameworks/recommend', {
@@ -35,11 +89,17 @@ export function FrameworkSelector({
           body: JSON.stringify({ productData }),
         });
 
+        if (!response.ok) {
+          throw new Error('Failed to fetch frameworks');
+        }
+
         const data = await response.json();
-        setFrameworks(data.frameworks || []);
-        setCategory(data.category || '');
+        setFrameworks(data.frameworks || defaultFrameworks);
+        setCategory(data.category || 'Product');
       } catch (error) {
-        console.error('Error fetching frameworks:', error);
+        console.error('Error fetching frameworks, using defaults:', error);
+        setFrameworks(defaultFrameworks);
+        setCategory('Product');
       } finally {
         setLoading(false);
       }
@@ -47,6 +107,10 @@ export function FrameworkSelector({
 
     if (productData) {
       fetchFrameworks();
+    } else {
+      setFrameworks(defaultFrameworks);
+      setCategory('Product');
+      setLoading(false);
     }
   }, [productData]);
 

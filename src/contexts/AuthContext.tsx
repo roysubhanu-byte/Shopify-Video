@@ -41,7 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('already registered')) {
+        throw new Error('This email is already registered. Please sign in instead.');
+      }
+      throw new Error(error.message || 'Failed to create account');
+    }
 
     if (data.user) {
       const { error: insertError } = await supabase
@@ -54,8 +59,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         ]);
 
-      if (insertError && insertError.code !== '23505') {
-        throw insertError;
+      if (insertError) {
+        if (insertError.code === '23505') {
+          return;
+        }
+        console.error('Failed to create user record:', insertError);
+        throw new Error('Account created but failed to initialize user profile. Please contact support.');
       }
     }
   };
