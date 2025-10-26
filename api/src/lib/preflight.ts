@@ -10,7 +10,7 @@ import {
   validateBeatOrder,
   validateOverlayWordCount,
   validateVoiceOverWPS,
-} from '../../../packages/shared/src/plan';
+} from '../types/plan';
 import { Logger } from './logger';
 
 const logger = new Logger({ module: 'preflight' });

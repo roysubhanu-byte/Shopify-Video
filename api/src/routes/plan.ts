@@ -10,7 +10,7 @@ import {
   VoiceOver,
   AssetRef,
   createDefaultConstraints,
-} from '../../../packages/shared/src/plan';
+} from '../types/plan';
 import { getRecommendedHooks } from '../lib/hooks-service';
 import { getProductAssets, getSelectedAssets } from '../lib/asset-analyzer';
 import { buildConceptPrompts, extractHookVariables } from '../lib/veo3-prompt-builder';

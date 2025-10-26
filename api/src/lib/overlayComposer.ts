@@ -1,4 +1,4 @@
-import { Overlay } from '../../../packages/shared/src/plan';
+import { Overlay } from '../types/plan';
 import { Logger } from './logger';
 import * as path from 'path';
 import * as fs from 'fs';

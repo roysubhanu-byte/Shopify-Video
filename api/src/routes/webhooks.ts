@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { runOcrQa, extractExpectedOverlays } from '../lib/ocrQa';
 import { burnOverlaysWithFFmpeg } from '../lib/overlayComposer';
-import { Plan, Overlay } from '../../../packages/shared/src/plan';
+import { Plan, Overlay } from '../types/plan';
 import { generateSRT, uploadSRTToStorage, validateSRT } from '../lib/srt-generator';
 import { WordTimestamp } from '../lib/tts-service';
 import * as path from 'path';

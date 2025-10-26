@@ -1,4 +1,4 @@
-import { Plan, Beat } from '../../../packages/shared/src/plan';
+import { Plan, Beat } from '../types/plan';
 import { Logger } from './logger';
 
 const logger = new Logger({ module: 'prompt-compiler' });

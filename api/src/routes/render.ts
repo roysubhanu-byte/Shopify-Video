@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
-import { Plan } from '../../../packages/shared/src/plan';
+import { Plan } from '../types/plan';
 import { createVEO3Client } from '../lib/veo3-client';
 import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
 

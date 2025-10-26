@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { renderStaticPNG } from '../lib/staticRenderer';
 import { uploadPublic, serveStaticFile } from '../lib/storage';
-import { Plan } from '../../../packages/shared/src/plan';
+import { Plan } from '../types/plan';
 
 const router = Router();
 const logger = new Logger({ module: 'static-route' });

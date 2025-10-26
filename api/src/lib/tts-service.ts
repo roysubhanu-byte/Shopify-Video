@@ -1,5 +1,5 @@
 import { Logger } from './logger';
-import { Beat, VoiceOver } from '../../../packages/shared/src/plan';
+import { Beat, VoiceOver } from '../types/plan';
 
 const logger = new Logger({ module: 'tts-service' });
 

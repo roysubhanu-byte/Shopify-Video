@@ -1,4 +1,4 @@
-import { Overlay } from '../../../packages/shared/src/plan';
+import { Overlay } from '../types/plan';
 import { Logger } from './logger';
 
 const logger = new Logger({ module: 'ocr-qa' });

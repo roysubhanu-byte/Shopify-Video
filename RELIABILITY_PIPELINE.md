@@ -8,7 +8,7 @@ Successfully implemented a comprehensive reliability pipeline for video generati
 
 ## ✅ What Was Implemented
 
-### 1. Shared Plan Schema (`/packages/shared/src/plan.ts`)
+### 1. Shared Plan Schema (`/api/src/types/plan.ts`)
 
 **Complete Zod Schema for Video Plans:**
 - **Brand** - Brand identity (name, colors, style, logo)
