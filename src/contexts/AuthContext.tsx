@@ -19,7 +19,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await ensureUserRecord(session.user);
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -27,6 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       (async () => {
+        if (session?.user) {
+          await ensureUserRecord(session.user);
+        }
         setSession(session);
         setUser(session?.user ?? null);
       })();
@@ -34,6 +40,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const ensureUserRecord = async (authUser: User) => {
+    try {
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (!existingUser) {
+        await supabase
+          .from('users')
+          .insert([{
+            id: authUser.id,
+            email: authUser.email,
+            credits: 50,
+          }]);
+      }
+    } catch (error) {
+      console.error('Error ensuring user record:', error);
+    }
+  };
 
   const signUp = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
@@ -70,12 +98,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(error.message || 'Failed to sign in');
+    }
+
+    if (data.user) {
+      await ensureUserRecord(data.user);
+    }
   };
 
   const signOut = async () => {
