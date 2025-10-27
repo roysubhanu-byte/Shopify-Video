@@ -72,7 +72,8 @@ export const BeatSchema = z.object({
   // Visual content
   assetRefs: z.array(AssetRefSchema).min(1).max(3),
   visualStyle: z.string().max(500),
-  cameraMovement: z.enum(['static', 'pan', 'zoom', 'tilt', 'dolly', 'dynamic']).default('dynamic'),
+  cameraMovement: z.enum(['push-in', 'pull-out', 'whip-pan', 'lock-off', 'orbit', 'handheld', 'static', 'dynamic']).default('dynamic'),
+  avoidElements: z.array(z.string()).optional(),
 
   // Audio content
   voiceOver: VoiceOverSchema.optional(),
@@ -98,6 +99,7 @@ export const ConstraintsSchema = z.object({
     'cure', 'treat', 'diagnose', 'prevent', 'guarantee',
     'miracle', 'instant', 'overnight', 'revolutionary',
   ]),
+  globalAvoidList: z.array(z.string()).optional(),
   requireBeatOrder: z.array(z.enum(['hook', 'demo', 'proof', 'cta'])).default(['hook', 'demo', 'proof', 'cta']),
   minBeatDuration: z.number().positive().default(4),
   maxBeatDuration: z.number().positive().default(8),
