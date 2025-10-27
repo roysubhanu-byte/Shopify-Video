@@ -1,13 +1,53 @@
+// src/components/HooksPanel.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { API_URL } from '../lib/config';
-import { Sparkles } from 'lucide-react';
 
-type HookTemplate = {
+type HookItem = {
   id: string;
-  label: string;
-  filled_text: string;
+  label: string;          // human friendly name/tag
+  text: string;           // the actual hook text to use
   vertical?: string;
 };
+
+const DEFAULT_HOOKS: HookItem[] = [
+  { id: 'pov',            label: 'POV',             text: 'POV: You finally found the perfect {{product}}.' },
+  { id: 'question',       label: 'Question',        text: 'Question: What if this changed everything about {{pain_point}}?' },
+  { id: 'before_after',   label: 'Before/After',    text: 'Before: {{problem}}. After: {{result}}.' },
+  { id: 'routine',        label: 'POV – Routine',   text: 'POV: Your morning routine got easier with {{product}}.' },
+  { id: 'stop_doing',     label: 'Stop Doing',      text: 'Stop doing this: stop wasting money on {{alternative}}—here’s why.' },
+  { id: 'did_you_know',   label: 'Did you know?',   text: 'Did you know? Most people skip this step and lose out on {{benefit}}.' },
+  { id: 'try_this',       label: 'Try this',        text: 'This is your sign: try something that actually works—{{product}}.' },
+  { id: 'secret',         label: 'Secret',          text: 'The secret to better results in half the time: {{product}}.' },
+  { id: 'struggle',       label: 'Struggle',        text: 'If you struggle with {{pain_point}}: this changes everything.' },
+  { id: 'obsessed',       label: 'Everyone is obsessed', text: 'Everyone is obsessed: this simple upgrade to {{product_category}}.' },
+];
+
+function normalizeHooks(payload: unknown, vertical?: string): HookItem[] {
+  // Accept either {items:[…]} or just […]; each item may have different field names.
+  const raw = Array.isArray(payload)
+    ? payload
+    : (typeof payload === 'object' && payload && Array.isArray((payload as any).items))
+      ? (payload as any).items
+      : [];
+
+  const out: HookItem[] = raw
+    .map((it: any, i: number): HookItem | null => {
+      const id = String(it.id ?? it.key ?? i);
+      const label = String(it.label ?? it.name ?? it.tag ?? 'Hook');
+      const text =
+        String(
+          it.filled_text ?? it.text ?? it.template ?? it.prompt ?? ''
+        ).trim();
+
+      if (!text) return null;
+      return { id, label, text, vertical: it.vertical ?? vertical };
+    })
+    .filter(Boolean) as HookItem[];
+
+  // Deduplicate by text to avoid near-dupes
+  const seen = new Set<string>();
+  return out.filter(h => (seen.has(h.text) ? false : (seen.add(h.text), true)));
+}
 
 export function HooksPanel({
   vertical = 'general',
@@ -16,121 +56,167 @@ export function HooksPanel({
   vertical?: string;
   onCustomHooksChange: (v: { A?: string; B?: string; C?: string }) => void;
 }) {
-  const [hooks, setHooks] = useState<HookTemplate[]>([]);
+  const [serverHooks, setServerHooks] = useState<HookItem[] | null>(null);
+  const [useDefaults, setUseDefaults] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  // simple local selections for A/B/C (optional UI; keep whatever you had)
-  const [selA, setSelA] = useState<string | undefined>();
-  const [selB, setSelB] = useState<string | undefined>();
-  const [selC, setSelC] = useState<string | undefined>();
-
-  const fallbackHooks: HookTemplate[] = useMemo(
-    () => [
-      { id: 'fallback-1', label: 'POV',           filled_text: 'POV: You finally found the perfect {{product}}' },
-      { id: 'fallback-2', label: 'Question',      filled_text: 'Question: What if {{benefit}} changed everything?' },
-      { id: 'fallback-3', label: 'Before/After',  filled_text: 'Before: {{problem}} → After: {{result}}' },
-      { id: 'fallback-4', label: 'Stop doing',    filled_text: 'Stop doing {{mundane_task}}. Do this instead.' },
-      { id: 'fallback-5', label: 'Did you know?', filled_text: 'Did you know most people skip {{secret_step}}?' },
-      { id: 'fallback-6', label: 'This is your sign', filled_text: 'This is your sign: try {{product}} now' },
-      { id: 'fallback-7', label: 'The secret to', filled_text: 'The secret to better {{result}} in half the time' },
-      { id: 'fallback-8', label: 'If you struggle', filled_text: 'If you struggle with {{pain_point}}: this changes everything' },
-    ],
-    []
-  );
+  // Three optional custom inputs the page wants back
+  const [customA, setCustomA] = useState('');
+  const [customB, setCustomB] = useState('');
+  const [customC, setCustomC] = useState('');
 
   useEffect(() => {
-    let aborted = false;
+    onCustomHooksChange({
+      A: customA.trim() || undefined,
+      B: customB.trim() || undefined,
+      C: customC.trim() || undefined,
+    });
+  }, [customA, customB, customC, onCustomHooksChange]);
 
-    (async () => {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
       setLoading(true);
-      setError(null);
-      try {
-        const url = `${API_URL}/api/hooks?vertical=${encodeURIComponent(vertical)}`;
-        const res = await fetch(url, { credentials: 'include' });
+      setErrMsg(null);
+      setUseDefaults(false);
 
+      try {
+        // Build URL
+        const url = `${API_URL}/api/hooks?vertical=${encodeURIComponent(vertical)}`;
+
+        // Request with a 6s timeout
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 6000);
+        const res = await fetch(url, { signal: ctrl.signal, credentials: 'include' });
+        clearTimeout(t);
+
+        // Content-type must be JSON
         const ct = res.headers.get('content-type') || '';
-        // helpful diagnostics if this ever fails again
-        if (!res.ok || !ct.includes('application/json')) {
-          const preview = await res.text().catch(() => '');
-          console.warn('[hooks] Bad response', {
-            requestUrl: url,
-            status: res.status,
-            contentType: ct,
-            preview: preview.slice(0, 200),
-          });
-          throw new Error(
-            res.ok
-              ? `Hooks endpoint did not return JSON (got: ${ct || 'unknown'})`
-              : `Failed to fetch hooks (${res.status})`
-          );
+        if (!ct.includes('application/json')) {
+          throw new Error(`Expected JSON from /api/hooks, got ${ct || 'unknown content-type'}`);
         }
 
-        const data = await res.json();
-        const items: HookTemplate[] = Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data)
-          ? data
-          : [];
+        const json = await res.json();
+        const normalized = normalizeHooks(json, vertical);
 
-        if (!aborted) setHooks(items.length ? items : fallbackHooks);
-      } catch (e) {
-        if (!aborted) {
-          console.warn('Failed to fetch hooks, using defaults:', e);
-          setError(
-            e instanceof Error ? e.message : 'Failed to load hooks'
-          );
-          setHooks(fallbackHooks);
+        if (!cancelled) {
+          if (res.ok && normalized.length > 0) {
+            setServerHooks(normalized);
+          } else {
+            setServerHooks(DEFAULT_HOOKS);
+            setUseDefaults(true);
+            setErrMsg(
+              res.ok
+                ? 'No hooks returned by API – using defaults.'
+                : `Hooks API error ${res.status}`
+            );
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setServerHooks(DEFAULT_HOOKS);
+          setUseDefaults(true);
+          setErrMsg(e?.message || 'Failed to fetch hooks – using defaults.');
         }
       } finally {
-        if (!aborted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    })();
+    }
 
+    load();
     return () => {
-      aborted = true;
+      cancelled = true;
     };
-  }, [API_URL, vertical, fallbackHooks]);
+  }, [vertical]);
 
-  // bubble A/B/C selections upward (keep your existing custom input UI if you had it)
-  useEffect(() => {
-    onCustomHooksChange({ A: selA, B: selB, C: selC });
-  }, [selA, selB, selC, onCustomHooksChange]);
+  const hooksToShow = useMemo<HookItem[]>(
+    () => (serverHooks && serverHooks.length > 0 ? serverHooks : DEFAULT_HOOKS),
+    [serverHooks]
+  );
 
   return (
-    <div className="bg-slate-900 rounded-xl border border-slate-800 p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-5 h-5 text-amber-400" />
-        <h3 className="text-white font-semibold">Trending Hooks</h3>
-        {error && (
-          <span className="text-amber-400 text-xs ml-2">
-            Using default hooks (server connection failed)
-          </span>
-        )}
-      </div>
+    <div className="mx-auto max-w-5xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <span className="inline-block">Trending Hooks</span>
+          </h3>
 
-      {loading ? (
-        <div className="text-slate-400">Loading hooks…</div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {hooks.map((h) => (
+          {useDefaults && (
+            <span className="text-xs text-yellow-300">
+              Using default hooks (server connection failed)
+            </span>
+          )}
+        </div>
+
+        {loading && (
+          <div className="text-slate-400 text-sm mb-4">Loading hooks…</div>
+        )}
+        {!!errMsg && !loading && (
+          <div className="text-xs text-yellow-300 mb-3">{errMsg}</div>
+        )}
+
+        {/* Pills */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          {hooksToShow.map((h) => (
             <button
               key={h.id}
               type="button"
               onClick={() => {
-                // quick sample behavior — pick in order A, then B, then C
-                if (!selA) setSelA(h.filled_text);
-                else if (!selB) setSelB(h.filled_text);
-                else setSelC(h.filled_text);
+                // Quick-fill the A/B/C inputs in a round-robin fashion
+                if (!customA) setCustomA(h.text);
+                else if (!customB) setCustomB(h.text);
+                else setCustomC(h.text);
               }}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-blue-500 text-slate-200"
-              title={h.filled_text}
+              className="px-3 py-2 rounded-full bg-slate-800 text-slate-200 border border-slate-700 hover:border-blue-500 hover:text-white transition-colors text-sm"
+              title={h.text}
             >
-              {h.label}: {h.filled_text.length > 36 ? h.filled_text.slice(0, 33) + '…' : h.filled_text}
+              {h.label}: {h.text.length > 28 ? `${h.text.slice(0, 28)}…` : h.text}
             </button>
           ))}
         </div>
-      )}
+
+        {/* Custom A */}
+        <div className="mb-4">
+          <label className="block text-slate-300 text-sm mb-1">
+            Custom Hook for Concept A (optional)
+          </label>
+          <input
+            value={customA}
+            onChange={(e) => setCustomA(e.target.value)}
+            placeholder="Write a custom hook for Concept A"
+            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Custom B */}
+        <div className="mb-4">
+          <label className="block text-slate-300 text-sm mb-1">
+            Custom Hook for Concept B (optional)
+          </label>
+          <input
+            value={customB}
+            onChange={(e) => setCustomB(e.target.value)}
+            placeholder="Write a custom hook for Concept B"
+            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Custom C */}
+        <div>
+          <label className="block text-slate-300 text-sm mb-1">
+            Custom Hook for Concept C (optional)
+          </label>
+          <input
+            value={customC}
+            onChange={(e) => setCustomC(e.target.value)}
+            placeholder="Write a custom hook for Concept C"
+            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
     </div>
   );
 }
