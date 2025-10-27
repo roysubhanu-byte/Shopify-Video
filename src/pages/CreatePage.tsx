@@ -100,9 +100,9 @@ export function CreatePage() {
 
       setCurrentStep('brand-guidelines');
     } catch (error) {
-      console.error('Error:', error);
-      alert(i18n.messages.error);
-      setIsIngesting(false);
+      console.error('Error ingesting URL:', error);
+      const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
+      addToast('error', errorMessage);
     } finally {
       setIsIngesting(false);
     }

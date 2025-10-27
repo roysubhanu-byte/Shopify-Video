@@ -3,7 +3,7 @@ import { Link2, Loader2, Palette } from 'lucide-react';
 import { i18n } from '../lib/i18n';
 
 interface UrlFormProps {
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, vertical: string) => void;
   isLoading?: boolean;
   productData?: {
     title: string;
@@ -23,7 +23,7 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (url.trim()) {
-      onSubmit(url.trim());
+      onSubmit(url.trim(), 'ecommerce');
     }
   };
 

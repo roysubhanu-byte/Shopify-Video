@@ -64,20 +64,29 @@ export async function ingest(url: string): Promise<IngestResponse> {
     };
   }
 
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to use this feature. Please sign in and try again.');
+  }
+
   const headers = await getAuthHeaders();
 
   // ✅ Backend route is POST /api/ingest/url
   const response = await fetch(`${API_URL}/api/ingest/url`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, userId: user.id }),
   });
 
   if (!response.ok) {
     let err = 'Failed to ingest product URL';
     try {
       const j = await response.json();
-      err = j?.error || j?.message || err;
+      err = j?.error || j?.details || j?.message || err;
+      if (j?.suggestion) {
+        err = `${err}\n\n${j.suggestion}`;
+      }
     } catch { /* ignore */ }
     throw new Error(err);
   }
