@@ -39,6 +39,14 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
       });
 
       const response = await fetch(`/api/products?${params}`);
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(
+          'API server is not running. Please start both servers with: npm run dev:full'
+        );
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -47,7 +55,11 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
 
       setProducts(data.items || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load products');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to load products. Make sure the API server is running (npm run dev:full)');
+      }
     } finally {
       setLoading(false);
     }
