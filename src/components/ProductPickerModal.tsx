@@ -61,31 +61,34 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b">
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden border border-slate-700">
+        <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
-            <ShoppingBag className="w-6 h-6 text-blue-600" />
-            <h2 className="text-2xl font-bold">Choose Product</h2>
+            <ShoppingBag className="w-6 h-6 text-blue-400" />
+            <div>
+              <h2 className="text-2xl font-bold text-white">Choose Product</h2>
+              <p className="text-sm text-slate-400 mt-1">Select a product to create ads for</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="p-6 border-b">
+        <div className="p-6 border-b border-slate-700">
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search products..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <button
@@ -106,14 +109,16 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+            <div className="bg-red-950 bg-opacity-30 border border-red-800 rounded-lg p-4 text-red-200">
               {error}
             </div>
           )}
 
           {!loading && !error && products.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              No products found
+            <div className="text-center py-12 text-slate-400">
+              <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No products found</p>
+              <p className="text-sm mt-2 text-slate-500">Try a different search or check the URL</p>
             </div>
           )}
 
@@ -122,20 +127,24 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
               {products.map((product) => (
                 <div
                   key={product.id}
-                  className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                  className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800 hover:border-blue-500 transition-all"
                 >
-                  {product.images[0] && (
+                  {product.images[0] ? (
                     <img
                       src={product.images[0]}
                       alt={product.title}
-                      className="w-full h-48 object-cover"
+                      className="w-full h-48 object-cover bg-slate-700"
                     />
+                  ) : (
+                    <div className="w-full h-48 bg-slate-700 flex items-center justify-center">
+                      <ShoppingBag className="w-12 h-12 text-slate-600" />
+                    </div>
                   )}
                   <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                    <h3 className="font-semibold text-white mb-2 line-clamp-2">
                       {product.title}
                     </h3>
-                    <p className="text-blue-600 font-bold mb-3">${product.price}</p>
+                    <p className="text-blue-400 font-bold mb-3">${product.price}</p>
                     <button
                       onClick={() => {
                         onSelect(product);
@@ -143,7 +152,7 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
                       }}
                       className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      Select
+                      Select Product
                     </button>
                   </div>
                 </div>

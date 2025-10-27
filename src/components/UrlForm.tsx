@@ -39,7 +39,7 @@ export function UrlForm({ onSubmit, isLoading, productData, palette, logoUrl }: 
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste your Shopify store URL (e.g., https://yourstore.myshopify.com)"
+              placeholder="Paste any product or store URL (e.g., https://yourstore.com)"
               className="w-full pl-12 pr-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={isLoading}
               required

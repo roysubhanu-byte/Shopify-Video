@@ -70,19 +70,10 @@ export function CreatePage() {
     setAdvancedMode,
   } = useStore();
 
-  const isShopifyUrl = (url: string): boolean => {
-    const lowerUrl = url.toLowerCase();
-    return lowerUrl.includes('myshopify.com') || lowerUrl.includes('.shopify.com');
-  };
-
   const handleUrlSubmit = async (url: string, vertical: string) => {
-    if (isShopifyUrl(url)) {
-      setPendingUrl({ url, vertical });
-      setShowProductPicker(true);
-      return;
-    }
-
-    await processIngest(url, vertical, null);
+    // Always show product picker to let users select which product to use
+    setPendingUrl({ url, vertical });
+    setShowProductPicker(true);
   };
 
   const handleProductSelect = async (product: any) => {
