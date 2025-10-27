@@ -3,24 +3,40 @@ import { z } from 'zod';
 
 const logger = new Logger({ module: 'structured-prompt-templates' });
 
-export const CameraMoveSchema = z.enum(['push-in', 'pull-out', 'whip-pan', 'lock-off', 'orbit', 'handheld', 'static']);
+export const CameraMoveSchema = z.enum([
+  'push-in',
+  'pull-out',
+  'whip-pan',
+  'lock-off',
+  'orbit',
+  'handheld',
+  'static',
+]);
 export type CameraMove = z.infer<typeof CameraMoveSchema>;
 
 export const StructuredPromptSchema = z.object({
   goal: z.string().min(10).max(200).describe('Primary objective of the video'),
   audience: z.string().min(5).max(100).describe('Target demographic'),
-  shots: z.array(z.object({
-    beatType: z.enum(['hook', 'demo', 'proof', 'cta']),
-    description: z.string().min(10).max(300),
-    duration: z.number().min(3).max(8),
-    cameraMove: CameraMoveSchema.optional(),
-    focus: z.string().optional(),
-  })).length(4),
-  text: z.array(z.object({
-    content: z.string().min(1).max(50),
-    timing: z.enum(['start', 'middle', 'end']),
-    emphasis: z.enum(['normal', 'strong', 'subtle']).optional(),
-  })).min(1),
+  shots: z
+    .array(
+      z.object({
+        beatType: z.enum(['hook', 'demo', 'proof', 'cta']),
+        description: z.string().min(10).max(300),
+        duration: z.number().min(3).max(8),
+        cameraMove: CameraMoveSchema.optional(),
+        focus: z.string().optional(),
+      })
+    )
+    .length(4),
+  text: z
+    .array(
+      z.object({
+        content: z.string().min(1).max(50),
+        timing: z.enum(['start', 'middle', 'end']),
+        emphasis: z.enum(['normal', 'strong', 'subtle']).optional(),
+      })
+    )
+    .min(1),
   cta: z.object({
     text: z.string().min(3).max(30),
     url: z.string().url().optional(),
@@ -101,38 +117,52 @@ export class StructuredPromptManager {
           position: 'bottom-center',
         },
       },
-      variables: ['product', 'problem', 'pain_point', 'audience', 'target_demographic', 'benefit', 'cta_text'],
+      variables: [
+        'product',
+        'problem',
+        'pain_point',
+        'audience',
+        'target_demographic',
+        'benefit',
+        'cta_text',
+      ],
       examples: [
         {
           productType: 'Fitness App',
           filled: {
-            goal: 'Show how FitPro solves inconsistent workout routines for busy professionals',
-            audience: 'Working professionals who struggle with finding time to exercise',
+            goal:
+              'Show how FitPro solves inconsistent workout routines for busy professionals',
+            audience:
+              'Working professionals who struggle with finding time to exercise',
             shots: [
               {
                 beatType: 'hook',
-                description: 'Person experiencing stress about missed workouts with frustration',
+                description:
+                  'Person experiencing stress about missed workouts with frustration',
                 duration: 3,
                 cameraMove: 'lock-off',
                 focus: 'facial expression',
               },
               {
                 beatType: 'demo',
-                description: 'FitPro app being used to schedule quick 15-minute workouts',
+                description:
+                  'FitPro app being used to schedule quick 15-minute workouts',
                 duration: 6,
                 cameraMove: 'push-in',
                 focus: 'product features',
               },
               {
                 beatType: 'proof',
-                description: 'Happy customer showing fitness progress after using FitPro',
+                description:
+                  'Happy customer showing fitness progress after using FitPro',
                 duration: 6,
                 cameraMove: 'handheld',
                 focus: 'transformation',
               },
               {
                 beatType: 'cta',
-                description: 'Product packshot with brand logo and Try Free for 7 Days',
+                description:
+                  'Product packshot with brand logo and Try Free for 7 Days',
                 duration: 3,
                 cameraMove: 'static',
                 focus: 'branding',
@@ -202,7 +232,16 @@ export class StructuredPromptManager {
           position: 'bottom-center',
         },
       },
-      variables: ['product', 'transformation_type', 'problem_state', 'desired_outcome', 'target_demographic', 'timeframe', 'result_metric', 'cta_text'],
+      variables: [
+        'product',
+        'transformation_type',
+        'problem_state',
+        'desired_outcome',
+        'target_demographic',
+        'timeframe',
+        'result_metric',
+        'cta_text',
+      ],
       examples: [],
     };
 
@@ -255,7 +294,15 @@ export class StructuredPromptManager {
           position: 'bottom-center',
         },
       },
-      variables: ['product', 'product_category', 'review_count', 'rating', 'testimonial_quote', 'customer_count', 'cta_text'],
+      variables: [
+        'product',
+        'product_category',
+        'review_count',
+        'rating',
+        'testimonial_quote',
+        'customer_count',
+        'cta_text',
+      ],
       examples: [],
     };
 
@@ -278,7 +325,7 @@ export class StructuredPromptManager {
   }
 
   getTemplatesByCategory(category: string): PromptTemplate[] {
-    return Array.from(this.templates.values()).filter(t => t.category === category);
+    return Array.from(this.templates.values()).filter((t) => t.category === category);
   }
 
   validatePrompt(prompt: StructuredPrompt): { valid: boolean; errors: string[] } {
@@ -296,19 +343,24 @@ export class StructuredPromptManager {
         errors.push(`Total duration must be 18-24s, got ${totalDuration}s`);
       }
 
-      const beatTypes = prompt.shots.map(s => s.beatType);
-      if (!beatTypes.includes('hook') || !beatTypes.includes('demo') ||
-          !beatTypes.includes('proof') || !beatTypes.includes('cta')) {
+      const beatTypes = prompt.shots.map((s) => s.beatType);
+      if (
+        !beatTypes.includes('hook') ||
+        !beatTypes.includes('demo') ||
+        !beatTypes.includes('proof') ||
+        !beatTypes.includes('cta')
+      ) {
         errors.push('Missing required beat types: hook, demo, proof, cta');
       }
 
       return {
         valid: errors.length === 0,
-        errors
+        errors,
       };
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errors = error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+        // Zod v4 => use `issues` (not `errors`)
+        const errors = error.issues.map((e) => `${e.path.join('.')}: ${e.message}`);
         return { valid: false, errors };
       }
       return { valid: false, errors: ['Unknown validation error'] };
@@ -322,7 +374,7 @@ export class StructuredPromptManager {
       return null;
     }
 
-    const missingVars = template.variables.filter(v => !variables[v]);
+    const missingVars = template.variables.filter((v) => !variables[v]);
     if (missingVars.length > 0) {
       logger.error('Missing required variables', { templateId, missingVars });
       return null;
@@ -377,7 +429,11 @@ export class StructuredPromptManager {
       return 'problem-solution';
     }
 
-    if (lowerCategory.includes('beauty') || lowerCategory.includes('fitness') || lowerCategory.includes('weight')) {
+    if (
+      lowerCategory.includes('beauty') ||
+      lowerCategory.includes('fitness') ||
+      lowerCategory.includes('weight')
+    ) {
       return 'before-after';
     }
 
