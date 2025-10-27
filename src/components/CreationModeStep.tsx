@@ -4,6 +4,7 @@ import { FrameworkSelector } from './FrameworkSelector';
 
 interface CreationModeStepProps {
   productData: any;
+  outputType: 'video' | 'static';
   onComplete: (data: {
     creationMode: 'automated' | 'manual';
     manualPrompt?: string;
@@ -11,7 +12,7 @@ interface CreationModeStepProps {
   }) => void;
 }
 
-export function CreationModeStep({ productData, onComplete }: CreationModeStepProps) {
+export function CreationModeStep({ productData, outputType, onComplete }: CreationModeStepProps) {
   const [creationMode, setCreationMode] = useState<'automated' | 'manual'>('automated');
   const [manualPrompt, setManualPrompt] = useState('');
   const [framework, setFramework] = useState<string | undefined>();
@@ -102,7 +103,10 @@ export function CreationModeStep({ productData, onComplete }: CreationModeStepPr
             Automated (Recommended)
           </h3>
           <p className="text-slate-400 mb-4">
-            We'll generate 3 video concepts using proven trending hooks that perform well on social media
+            {outputType === 'video'
+              ? "We'll generate 3 video concepts using proven trending hooks that perform well on social media"
+              : "We'll generate 3 image concepts with trending hooks optimized for static advertisements"
+            }
           </p>
           <ul className="space-y-2">
             <li className="flex items-start gap-2 text-sm text-slate-300">
@@ -121,7 +125,7 @@ export function CreationModeStep({ productData, onComplete }: CreationModeStepPr
               <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>Optimized for maximum engagement</span>
+              <span>{outputType === 'video' ? 'Optimized for maximum engagement' : 'Each concept gets 3 image variants (5 credits)'}</span>
             </li>
           </ul>
         </button>
@@ -150,14 +154,17 @@ export function CreationModeStep({ productData, onComplete }: CreationModeStepPr
             Manual (Custom)
           </h3>
           <p className="text-slate-400 mb-4">
-            Describe your own video concept and we'll enhance it with AI-powered intelligence
+            {outputType === 'video'
+              ? "Describe your own video concept and we'll enhance it with AI-powered intelligence"
+              : "Describe your own image concept and we'll generate 3 variants with professional design"
+            }
           </p>
           <ul className="space-y-2">
             <li className="flex items-start gap-2 text-sm text-slate-300">
               <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>Full creative control over concept</span>
+              <span>1 custom concept tailored to your vision</span>
             </li>
             <li className="flex items-start gap-2 text-sm text-slate-300">
               <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,7 +176,7 @@ export function CreationModeStep({ productData, onComplete }: CreationModeStepPr
               <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>Regional targeting applied automatically</span>
+              <span>{outputType === 'video' ? '1 credit for preview or 3 for final' : '5 credits for 3 image variants'}</span>
             </li>
           </ul>
         </button>

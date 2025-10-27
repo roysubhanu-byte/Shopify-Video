@@ -9,6 +9,8 @@ interface StoreState {
   variants: VariantPlan[];
   renders: Map<string, VariantRender>;
   currentRunId: string | null;
+  outputType: 'video' | 'static' | null;
+  advancedMode: boolean;
 
   setCredits: (credits: number) => void;
   setProductUrl: (url: string) => void;
@@ -16,6 +18,8 @@ interface StoreState {
   setVariants: (variants: VariantPlan[]) => void;
   setRender: (variantId: string, render: VariantRender) => void;
   setCurrentRunId: (runId: string | null) => void;
+  setOutputType: (outputType: 'video' | 'static') => void;
+  setAdvancedMode: (advancedMode: boolean) => void;
   resetProject: () => void;
 }
 
@@ -27,6 +31,8 @@ export const useStore = create<StoreState>((set) => ({
   variants: [],
   renders: new Map(),
   currentRunId: null,
+  outputType: null,
+  advancedMode: false,
 
   setCredits: (credits) => set({ credits }),
 
@@ -47,6 +53,10 @@ export const useStore = create<StoreState>((set) => ({
 
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
 
+  setOutputType: (outputType) => set({ outputType }),
+
+  setAdvancedMode: (advancedMode) => set({ advancedMode }),
+
   resetProject: () => set({
     productUrl: '',
     projectId: null,
@@ -54,5 +64,7 @@ export const useStore = create<StoreState>((set) => ({
     variants: [],
     renders: new Map(),
     currentRunId: null,
+    outputType: null,
+    advancedMode: false,
   }),
 }));

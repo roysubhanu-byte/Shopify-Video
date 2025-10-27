@@ -16,6 +16,7 @@ interface HooksPanelProps {
 export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksPanelProps) {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [customHookA, setCustomHookA] = useState('');
   const [customHookB, setCustomHookB] = useState('');
   const [customHookC, setCustomHookC] = useState('');
@@ -50,19 +51,22 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
     ];
 
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/hooks?vertical=${vertical}&limit=10`);
       if (!response.ok) {
-        throw new Error('Failed to fetch hooks');
+        throw new Error('Failed to fetch hooks from server');
       }
       const data = await response.json();
       if (data.hooks && data.hooks.length > 0) {
         setHooks(data.hooks);
+        setError(null);
       } else {
         setHooks(defaultHooks);
       }
     } catch (error) {
       console.error('Failed to fetch hooks, using defaults:', error);
+      setError('Using default hooks (server connection failed)');
       setHooks(defaultHooks);
     } finally {
       setLoading(false);
@@ -86,10 +90,16 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-yellow-500" />
-        <h3 className="text-lg font-semibold">Trending Hooks</h3>
+        <h3 className="text-lg font-semibold text-white">Trending Hooks</h3>
+        {error && (
+          <span className="ml-auto text-xs text-yellow-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {error}
+          </span>
+        )}
       </div>
 
       {loading && (
@@ -108,7 +118,7 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
                 className={`px-4 py-2 rounded-full text-sm transition-all ${
                   selectedHook === hook.example
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                 }`}
               >
                 {hook.template}: {hook.example.length > 30 ? hook.example.substring(0, 30) + '...' : hook.example}
@@ -117,8 +127,8 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
           </div>
 
           <div className="space-y-4">
-            <div className="border-t pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="border-t border-slate-800 pt-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Custom Hook for Concept A (optional)
               </label>
               <input
@@ -126,13 +136,13 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
                 value={customHookA}
                 onChange={(e) => setCustomHookA(e.target.value)}
                 placeholder="Enter custom hook (≤6 words)"
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  !isValidHook(customHookA) ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-2 border rounded-lg bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !isValidHook(customHookA) ? 'border-red-500' : 'border-slate-700'
                 }`}
               />
               <div className="flex items-center justify-between mt-1">
                 <span className={`text-sm ${
-                  !isValidHook(customHookA) ? 'text-red-600 font-medium' : 'text-gray-500'
+                  !isValidHook(customHookA) ? 'text-red-400 font-medium' : 'text-slate-500'
                 }`}>
                   {getWordCount(customHookA)}/6 words
                 </span>
@@ -146,7 +156,7 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Custom Hook for Concept B (optional)
               </label>
               <input
@@ -154,18 +164,18 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
                 value={customHookB}
                 onChange={(e) => setCustomHookB(e.target.value)}
                 placeholder="Enter custom hook (≤6 words)"
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  !isValidHook(customHookB) ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-2 border rounded-lg bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !isValidHook(customHookB) ? 'border-red-500' : 'border-slate-700'
                 }`}
               />
               <div className="flex items-center justify-between mt-1">
                 <span className={`text-sm ${
-                  !isValidHook(customHookB) ? 'text-red-600 font-medium' : 'text-gray-500'
+                  !isValidHook(customHookB) ? 'text-red-400 font-medium' : 'text-slate-500'
                 }`}>
                   {getWordCount(customHookB)}/6 words
                 </span>
                 {!isValidHook(customHookB) && (
-                  <span className="flex items-center gap-1 text-red-600 text-sm">
+                  <span className="flex items-center gap-1 text-red-400 text-sm">
                     <AlertCircle className="w-4 h-4" />
                     Exceeds 6 words
                   </span>
@@ -174,7 +184,7 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
                 Custom Hook for Concept C (optional)
               </label>
               <input
@@ -182,18 +192,18 @@ export function HooksPanel({ vertical = 'general', onCustomHooksChange }: HooksP
                 value={customHookC}
                 onChange={(e) => setCustomHookC(e.target.value)}
                 placeholder="Enter custom hook (≤6 words)"
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  !isValidHook(customHookC) ? 'border-red-500' : 'border-gray-300'
+                className={`w-full px-4 py-2 border rounded-lg bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !isValidHook(customHookC) ? 'border-red-500' : 'border-slate-700'
                 }`}
               />
               <div className="flex items-center justify-between mt-1">
                 <span className={`text-sm ${
-                  !isValidHook(customHookC) ? 'text-red-600 font-medium' : 'text-gray-500'
+                  !isValidHook(customHookC) ? 'text-red-400 font-medium' : 'text-slate-500'
                 }`}>
                   {getWordCount(customHookC)}/6 words
                 </span>
                 {!isValidHook(customHookC) && (
-                  <span className="flex items-center gap-1 text-red-600 text-sm">
+                  <span className="flex items-center gap-1 text-red-400 text-sm">
                     <AlertCircle className="w-4 h-4" />
                     Exceeds 6 words
                   </span>

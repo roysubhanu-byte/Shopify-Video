@@ -6,6 +6,7 @@ import { UrlForm } from '../components/UrlForm';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { ProductPickerModal } from '../components/ProductPickerModal';
 import { BrandGuidelinesStep } from '../components/BrandGuidelinesStep';
+import { OutputTypeStep } from '../components/OutputTypeStep';
 import { CreationModeStep } from '../components/CreationModeStep';
 import { HooksPanel } from '../components/HooksPanel';
 import { ModeTabs } from '../components/ModeTabs';
@@ -27,7 +28,7 @@ interface Asset {
   height: number;
 }
 
-type FlowStep = 'url' | 'brand-guidelines' | 'asset-selection' | 'storyboard' | 'creation-mode' | 'hooks' | 'concepts';
+type FlowStep = 'url' | 'brand-guidelines' | 'asset-selection' | 'storyboard' | 'output-type' | 'creation-mode' | 'hooks' | 'concepts';
 
 export function CreatePage() {
   const credits = useUserCredits();
@@ -60,10 +61,13 @@ export function CreatePage() {
     variants,
     renders,
     currentRunId,
+    outputType,
     setProjectData,
     setVariants,
     setRender,
     setCurrentRunId,
+    setOutputType,
+    setAdvancedMode,
   } = useStore();
 
   const isShopifyUrl = (url: string): boolean => {
@@ -138,7 +142,7 @@ export function CreatePage() {
     if (availableAssets.length > 0) {
       setCurrentStep('asset-selection');
     } else {
-      setCurrentStep('creation-mode');
+      setCurrentStep('output-type');
     }
   };
 
@@ -151,6 +155,16 @@ export function CreatePage() {
   };
 
   const handleStoryboardComplete = () => {
+    setCurrentStep('output-type');
+  };
+
+  const handleOutputTypeComplete = (data: { outputType: 'video' | 'static'; advancedMode?: boolean }) => {
+    if (data.advancedMode) {
+      setAdvancedMode(true);
+      navigate('/prompt');
+      return;
+    }
+    setOutputType(data.outputType);
     setCurrentStep('creation-mode');
   };
 
@@ -332,6 +346,7 @@ export function CreatePage() {
         { id: 'asset-selection', label: 'Images' },
         { id: 'storyboard', label: 'Storyboard' },
       ] : []),
+      { id: 'output-type', label: 'Output' },
       { id: 'creation-mode', label: 'Mode' },
       ...(creationMode === 'automated' ? [{ id: 'hooks', label: 'Hooks' }] : []),
       { id: 'concepts', label: 'Create' },
@@ -381,10 +396,11 @@ export function CreatePage() {
                 if (currentStep === 'brand-guidelines') setCurrentStep('url');
                 else if (currentStep === 'asset-selection') setCurrentStep('brand-guidelines');
                 else if (currentStep === 'storyboard') setCurrentStep('asset-selection');
-                else if (currentStep === 'creation-mode') {
+                else if (currentStep === 'output-type') {
                   if (availableAssets.length > 0) setCurrentStep('storyboard');
                   else setCurrentStep('brand-guidelines');
                 }
+                else if (currentStep === 'creation-mode') setCurrentStep('output-type');
                 else if (currentStep === 'hooks') setCurrentStep('creation-mode');
                 else if (currentStep === 'concepts' && creationMode === 'automated') setCurrentStep('hooks');
                 else if (currentStep === 'concepts' && creationMode === 'manual') setCurrentStep('creation-mode');
@@ -498,10 +514,16 @@ export function CreatePage() {
               </button>
             </div>
           </div>
+        ) : currentStep === 'output-type' ? (
+          <OutputTypeStep
+            onComplete={handleOutputTypeComplete}
+            initialOutputType={outputType || undefined}
+          />
         ) : currentStep === 'creation-mode' ? (
           <CreationModeStep
             productData={productData}
             onComplete={handleCreationModeComplete}
+            outputType={outputType || 'video'}
           />
         ) : currentStep === 'hooks' ? (
           <div className="space-y-8">
