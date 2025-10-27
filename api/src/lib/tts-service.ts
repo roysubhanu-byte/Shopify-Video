@@ -22,20 +22,38 @@ export interface TTSResult {
   duration: number;
   segments: TTSSegment[];
   allWordTimestamps: WordTimestamp[];
+  pronunciationGuidesApplied: number;
+}
+
+export interface PronunciationGuide {
+  word: string;
+  pronunciation: string;
+  phonetic?: string;
+  ssml?: string;
 }
 
 /**
- * Generate TTS audio for all beats with word-level timestamps
+ * Generate TTS audio for all beats with word-level timestamps and SSML pronunciation guides
  *
  * This uses Google Cloud Text-to-Speech API which provides:
  * - High-quality voices
  * - Word-level timing information
  * - Multiple voice options
+ * - SSML support for pronunciation control
  */
-export async function generateTTSForBeats(beats: Beat[]): Promise<TTSResult> {
-  logger.info('Generating TTS for beats', {
+export async function generateTTSForBeats(
+  beats: Beat[],
+  brandName?: string,
+  pronunciationGuides?: PronunciationGuide[]
+): Promise<TTSResult> {
+  logger.info('Generating TTS for beats with pronunciation guides', {
     beatCount: beats.length,
+    brandName,
+    guidesCount: pronunciationGuides?.length || 0,
   });
+
+  const brandGuides = buildBrandPronunciationGuides(brandName, pronunciationGuides);
+  let pronunciationGuidesApplied = 0;
 
   const segments: TTSSegment[] = [];
   let totalDuration = 0;
@@ -49,8 +67,16 @@ export async function generateTTSForBeats(beats: Beat[]): Promise<TTSResult> {
       continue;
     }
 
+    const textWithGuides = applyPronunciationGuides(
+      beat.voiceOver.text,
+      brandGuides
+    );
+
+    const guidesUsed = countGuidesInText(textWithGuides);
+    pronunciationGuidesApplied += guidesUsed;
+
     const segment = await generateTTSSegment(
-      beat.voiceOver,
+      { ...beat.voiceOver, text: textWithGuides },
       beat.startTime,
       beat.endTime
     );
@@ -70,6 +96,7 @@ export async function generateTTSForBeats(beats: Beat[]): Promise<TTSResult> {
     totalDuration,
     wordCount: allWordTimestamps.length,
     audioUrl: combinedAudioUrl,
+    pronunciationGuidesApplied,
   });
 
   return {
@@ -77,6 +104,7 @@ export async function generateTTSForBeats(beats: Beat[]): Promise<TTSResult> {
     duration: totalDuration,
     segments,
     allWordTimestamps,
+    pronunciationGuidesApplied,
   };
 }
 
@@ -200,6 +228,96 @@ async function generateTTSSegmentReal(
   };
 }
 */
+
+function buildBrandPronunciationGuides(
+  brandName?: string,
+  customGuides?: PronunciationGuide[]
+): PronunciationGuide[] {
+  const guides: PronunciationGuide[] = [...(customGuides || [])];
+
+  if (brandName) {
+    const existingGuide = guides.find(g => g.word.toLowerCase() === brandName.toLowerCase());
+    if (!existingGuide) {
+      guides.push({
+        word: brandName,
+        pronunciation: brandName,
+        ssml: `<emphasis level="strong">${brandName}</emphasis>`,
+      });
+    }
+  }
+
+  const commonBrandMispronunciations: Record<string, PronunciationGuide> = {
+    'nike': {
+      word: 'Nike',
+      pronunciation: 'Ny-key',
+      phonetic: 'ˈnaɪki',
+      ssml: '<phoneme alphabet="ipa" ph="ˈnaɪki">Nike</phoneme>',
+    },
+    'adidas': {
+      word: 'Adidas',
+      pronunciation: 'Ah-dee-dahs',
+      phonetic: 'ˈɑːdidɑːs',
+      ssml: '<phoneme alphabet="ipa" ph="ˈɑːdidɑːs">Adidas</phoneme>',
+    },
+    'loreal': {
+      word: "L'Oreal",
+      pronunciation: "Loh-ree-ahl",
+      phonetic: 'loʊriˈɑːl',
+      ssml: '<phoneme alphabet="ipa" ph="loʊriˈɑːl">L\'Oreal</phoneme>',
+    },
+    'porsche': {
+      word: 'Porsche',
+      pronunciation: 'Por-shuh',
+      phonetic: 'ˈpɔːrʃə',
+      ssml: '<phoneme alphabet="ipa" ph="ˈpɔːrʃə">Porsche</phoneme>',
+    },
+    'hermes': {
+      word: 'Hermes',
+      pronunciation: 'Air-mez',
+      phonetic: 'ɛʁmɛs',
+      ssml: '<phoneme alphabet="ipa" ph="ɛʁmɛs">Hermes</phoneme>',
+    },
+  };
+
+  if (brandName) {
+    const lowerBrand = brandName.toLowerCase();
+    const commonGuide = commonBrandMispronunciations[lowerBrand];
+    if (commonGuide && !guides.some(g => g.word.toLowerCase() === lowerBrand)) {
+      guides.push(commonGuide);
+    }
+  }
+
+  logger.info('Built pronunciation guides', {
+    totalGuides: guides.length,
+    brandName,
+  });
+
+  return guides;
+}
+
+function applyPronunciationGuides(
+  text: string,
+  guides: PronunciationGuide[]
+): string {
+  let processedText = text;
+
+  guides.forEach(guide => {
+    const regex = new RegExp(`\\b${guide.word}\\b`, 'gi');
+    const ssml = guide.ssml || `<emphasis level="moderate">${guide.word}</emphasis>`;
+    processedText = processedText.replace(regex, ssml);
+  });
+
+  if (processedText !== text) {
+    processedText = `<speak>${processedText}</speak>`;
+  }
+
+  return processedText;
+}
+
+function countGuidesInText(text: string): number {
+  const ssmlTags = text.match(/<(phoneme|emphasis)/g);
+  return ssmlTags ? ssmlTags.length : 0;
+}
 
 /**
  * Generate silence audio for beats without voice-over

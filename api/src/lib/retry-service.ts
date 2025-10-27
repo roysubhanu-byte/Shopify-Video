@@ -10,11 +10,14 @@ export interface RetryDecision {
   reason: string;
   failureCategory: 'api_error' | 'timeout' | 'quality_validation' | 'user_cancelled' | 'other';
   maxRetriesReached: boolean;
+  recommendedSeed?: number;
+  retryStrategy?: 'same_seed' | 'new_seed' | 'improved_prompt';
 }
 
 export class RetryService {
-  private maxFreeRetries = 1;
+  private maxFreeRetries = 3;
   private retryDelayMs = 2000;
+  private qualityThresholdForNewSeed = 60;
 
   async evaluateRetryEligibility(
     beatGenerationId: string,
@@ -67,12 +70,19 @@ export class RetryService {
       }
 
       if (qualityValidation && !qualityValidation.overallPassed && qualityValidation.eligibleForFreeRetry) {
+        const retryStrategy = this.determineRetryStrategy(qualityValidation, retryCount);
+        const recommendedSeed = retryStrategy === 'new_seed'
+          ? this.generateVariationSeed(beatGen.seed || 0, retryCount)
+          : beatGen.seed || 0;
+
         return {
           shouldRetry: true,
           isFreeRetry: true,
-          reason: 'Automatic retry due to quality validation failure',
+          reason: `Automatic retry due to quality validation failure (score: ${qualityValidation.overallScore})`,
           failureCategory: 'quality_validation',
           maxRetriesReached: false,
+          recommendedSeed,
+          retryStrategy,
         };
       }
 
@@ -112,6 +122,33 @@ export class RetryService {
       logger.error('Error in getRetryCount', { error });
       return 0;
     }
+  }
+
+  private determineRetryStrategy(
+    qualityValidation: QualityValidationSummary,
+    retryCount: number
+  ): 'same_seed' | 'new_seed' | 'improved_prompt' {
+    const motionIssues = qualityValidation.validations.find(
+      v => v.validationType === 'motion_smoothness' && !v.passed
+    );
+    const glitchIssues = qualityValidation.validations.find(
+      v => v.validationType === 'glitch_detection' && !v.passed
+    );
+
+    if (motionIssues || glitchIssues) {
+      return 'new_seed';
+    }
+
+    if (qualityValidation.overallScore < this.qualityThresholdForNewSeed) {
+      return retryCount === 0 ? 'new_seed' : 'improved_prompt';
+    }
+
+    return 'same_seed';
+  }
+
+  private generateVariationSeed(originalSeed: number, retryCount: number): number {
+    const variation = (retryCount + 1) * 1000;
+    return originalSeed + variation;
   }
 
   private categorizeError(error: Error): 'api_error' | 'timeout' | 'other' {
