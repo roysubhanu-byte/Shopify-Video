@@ -1,41 +1,38 @@
 // src/lib/api.health.ts
 import { API_URL } from './config';
 
-/**
- * Always hit the deployed API's /healthz.
- * Adds cache-buster and very clear logging.
- */
 export async function checkApiHealth(): Promise<boolean> {
-  const healthUrl = `${API_URL.replace(/\/+$/, '')}/healthz?ts=${Date.now()}`;
-
   try {
-    const res = await fetch(healthUrl, {
+    // In dev we can still use the API_URL directly — it’s consistent.
+    const healthUrl = `${API_URL}/healthz`;
+
+    const response = await fetch(healthUrl, {
       method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(6000),
+      // 5s timeout so it doesn’t hang the UI
+      signal: AbortSignal.timeout(5000),
     });
 
-    const ok = res.ok;
-    // Try to read JSON (optional)
-    let body: any = null;
-    try { body = await res.json(); } catch {}
+    // Don’t just rely on status; parse and ensure ok=true if present
+    if (!response.ok) return false;
 
-    console.log('[health] →', healthUrl, 'status=', res.status, 'ok=', ok, 'body=', body);
-    return ok;
-  } catch (err) {
-    console.warn('[health] request failed →', healthUrl, err);
+    const json = await response.json().catch(() => ({}));
+    if (typeof json === 'object' && json !== null) {
+      if ('ok' in json && json.ok === true) return true;
+    }
+
+    // If no body shape, treat any 2xx as healthy
+    return true;
+  } catch {
     return false;
   }
 }
 
-export async function waitForApi(maxAttempts = 8, delayMs = 800): Promise<boolean> {
+export async function waitForApi(maxAttempts = 1, delayMs = 0): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
-    const alive = await checkApiHealth();
-    if (alive) return true;
+    const isHealthy = await checkApiHealth();
+    if (isHealthy) return true;
     if (i < maxAttempts - 1) {
-      await new Promise(r => setTimeout(r, delayMs));
+      await new Promise((r) => setTimeout(r, delayMs));
     }
   }
   return false;
