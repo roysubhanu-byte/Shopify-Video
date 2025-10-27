@@ -10,13 +10,24 @@ import { CreationModeStep } from '../components/CreationModeStep';
 import { HooksPanel } from '../components/HooksPanel';
 import { ModeTabs } from '../components/ModeTabs';
 import { ToastContainer } from '../components/Toast';
+import AssetSelectionModal from '../components/AssetSelectionModal';
+import StoryboardPreview from '../components/StoryboardPreview';
 import { useUserCredits } from '../hooks/useUserCredits';
 import { useStore } from '../store/useStore';
 import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
 import { i18n } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
 
-type FlowStep = 'url' | 'brand-guidelines' | 'creation-mode' | 'hooks' | 'concepts';
+interface Asset {
+  id: string;
+  url: string;
+  type: 'product' | 'lifestyle' | 'detail';
+  qualityScore: number;
+  width: number;
+  height: number;
+}
+
+type FlowStep = 'url' | 'brand-guidelines' | 'asset-selection' | 'storyboard' | 'creation-mode' | 'hooks' | 'concepts';
 
 export function CreatePage() {
   const credits = useUserCredits();
@@ -39,6 +50,9 @@ export function CreatePage() {
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
   const [showCreditDialog, setShowCreditDialog] = useState(false);
   const [creditError, setCreditError] = useState<{ needed: number; current: number } | null>(null);
+  const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
+  const [showAssetModal, setShowAssetModal] = useState(false);
 
   const {
     projectId,
@@ -79,6 +93,11 @@ export function CreatePage() {
     try {
       const ingestData = await ingest(url);
       setProjectData(ingestData);
+
+      if ((ingestData as any).assets && Array.isArray((ingestData as any).assets)) {
+        setAvailableAssets((ingestData as any).assets);
+      }
+
       setCurrentStep('brand-guidelines');
     } catch (error) {
       console.error('Error:', error);
@@ -92,6 +111,23 @@ export function CreatePage() {
   const handleBrandGuidelinesComplete = (data: { brandTonePrompt: string; targetMarket: string }) => {
     setBrandTonePrompt(data.brandTonePrompt);
     setTargetMarket(data.targetMarket);
+
+    if (availableAssets.length > 0) {
+      setCurrentStep('asset-selection');
+    } else {
+      setCurrentStep('creation-mode');
+    }
+  };
+
+  const handleAssetSelectionComplete = () => {
+    if (selectedAssets.length >= 3) {
+      setCurrentStep('storyboard');
+    } else {
+      addToast('error', 'Please select at least 3 images');
+    }
+  };
+
+  const handleStoryboardComplete = () => {
     setCurrentStep('creation-mode');
   };
 
@@ -264,6 +300,10 @@ export function CreatePage() {
     const steps = [
       { id: 'url', label: 'Product' },
       { id: 'brand-guidelines', label: 'Brand' },
+      ...(availableAssets.length > 0 ? [
+        { id: 'asset-selection', label: 'Images' },
+        { id: 'storyboard', label: 'Storyboard' },
+      ] : []),
       { id: 'creation-mode', label: 'Mode' },
       ...(creationMode === 'automated' ? [{ id: 'hooks', label: 'Hooks' }] : []),
       { id: 'concepts', label: 'Create' },
@@ -311,7 +351,12 @@ export function CreatePage() {
             <button
               onClick={() => {
                 if (currentStep === 'brand-guidelines') setCurrentStep('url');
-                else if (currentStep === 'creation-mode') setCurrentStep('brand-guidelines');
+                else if (currentStep === 'asset-selection') setCurrentStep('brand-guidelines');
+                else if (currentStep === 'storyboard') setCurrentStep('asset-selection');
+                else if (currentStep === 'creation-mode') {
+                  if (availableAssets.length > 0) setCurrentStep('storyboard');
+                  else setCurrentStep('brand-guidelines');
+                }
                 else if (currentStep === 'hooks') setCurrentStep('creation-mode');
                 else if (currentStep === 'concepts' && creationMode === 'automated') setCurrentStep('hooks');
                 else if (currentStep === 'concepts' && creationMode === 'manual') setCurrentStep('creation-mode');
@@ -350,6 +395,81 @@ export function CreatePage() {
             initialBrandTone={brandTonePrompt}
             initialTargetMarket={targetMarket}
           />
+        ) : currentStep === 'asset-selection' ? (
+          <div className="space-y-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Select Product Images
+              </h2>
+              <p className="text-slate-400">
+                Choose 3-5 images for your video storyboard
+              </p>
+            </div>
+
+            <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
+              <div className="mb-6">
+                <p className="text-white font-semibold mb-2">Available Images: {availableAssets.length}</p>
+                <p className="text-slate-400 text-sm">Selected: {selectedAssets.length}</p>
+              </div>
+
+              <button
+                onClick={() => setShowAssetModal(true)}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                {selectedAssets.length > 0 ? 'Change Selection' : 'Select Images'}
+              </button>
+
+              {selectedAssets.length > 0 && (
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {selectedAssets.map((asset, index) => (
+                    <div key={asset.id} className="relative">
+                      <img
+                        src={asset.url}
+                        alt={`Selected ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border-2 border-blue-500"
+                      />
+                      <div className="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={handleAssetSelectionComplete}
+                disabled={selectedAssets.length < 3}
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
+              >
+                Continue to Storyboard
+                <ArrowRight size={20} />
+              </button>
+            </div>
+          </div>
+        ) : currentStep === 'storyboard' ? (
+          <div className="space-y-8">
+            <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
+              <StoryboardPreview
+                assets={selectedAssets}
+                hook={customHooks.A || variants[0]?.hook}
+                productName={(productData as any)?.title}
+                onReorder={setSelectedAssets}
+                onEditAssets={() => setShowAssetModal(true)}
+              />
+            </div>
+
+            <div className="flex justify-center">
+              <button
+                onClick={handleStoryboardComplete}
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
+              >
+                Looks Good - Continue
+                <ArrowRight size={20} />
+              </button>
+            </div>
+          </div>
         ) : currentStep === 'creation-mode' ? (
           <CreationModeStep
             productData={productData}
@@ -466,6 +586,19 @@ export function CreatePage() {
           onClose={() => setSelectedVideo(null)}
         />
       )}
+
+      <AssetSelectionModal
+        isOpen={showAssetModal}
+        assets={availableAssets}
+        selectedAssets={selectedAssets}
+        onClose={() => setShowAssetModal(false)}
+        onConfirm={(selected) => {
+          setSelectedAssets(selected);
+          setShowAssetModal(false);
+        }}
+        minSelection={3}
+        maxSelection={5}
+      />
 
       {showCreditDialog && creditError && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
