@@ -1,7 +1,10 @@
+// api/src/index.ts
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
 import { logger, requestLogger } from './lib/logger';
+
 import ingestRouter from './routes/ingest';
 import healthRouter from './routes/health';
 import planRouter from './routes/plan';
@@ -18,39 +21,66 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8787;
 
-const allowedOrigins = [
-  process.env.APP_URL,
+/**
+ * Build the allowlist:
+ * - APP_ORIGINS (comma-separated) or APP_URL
+ * - Any *.vercel.app (preview/prod)
+ * - Local dev ports (Vite)
+ */
+const configured = (process.env.APP_ORIGINS || process.env.APP_URL || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const allowedOrigins: (string | RegExp)[] = [
+  ...configured,
   /^https:\/\/.*\.vercel\.app$/,
   'http://localhost:5173',
   'http://localhost:4173',
-].filter(Boolean);
+];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+/**
+ * Health endpoint needs permissive CORS so
+ * the frontend can always verify API status.
+ * We attach headers first, then hand off to the router.
+ */
+app.get('/healthz', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  return next();
+});
 
-    const isAllowed = allowedOrigins.some(allowed => {
-      if (typeof allowed === 'string') {
-        return origin === allowed;
-      } else if (allowed instanceof RegExp) {
-        return allowed.test(origin);
-      }
-      return false;
-    });
+/** Global CORS for the rest of the API */
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Non-browser / server-to-server calls
+      if (!origin) return cb(null, true);
 
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      logger.warn('CORS blocked origin', { origin, allowedOrigins: allowedOrigins.map(o => o.toString()) });
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-}));
+      const ok = allowedOrigins.some((allowed) =>
+        typeof allowed === 'string' ? origin === allowed : allowed.test(origin)
+      );
+
+      if (ok) return cb(null, true);
+
+      logger.warn('CORS blocked origin', {
+        origin,
+        allowedOrigins: allowedOrigins.map(o => o.toString()),
+      });
+      return cb(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
+
+/** Respond to all preflight requests */
+app.options('*', cors());
 
 app.use(express.json());
 app.use(requestLogger);
 
+/** Routes */
 app.use(healthRouter);
 app.use(ingestRouter);
 app.use(planRouter);
@@ -62,10 +92,13 @@ app.use(staticRouter);
 app.use(frameworksRouter);
 app.use(beatsRouter);
 
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error('Server error', err, { endpoint: req.path, method: req.method });
-  res.status(500).json({ error: 'Internal server error' });
-});
+/** Error handler */
+app.use(
+  (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    logger.error('Server error', err, { endpoint: req.path, method: req.method });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+);
 
 async function start() {
   logger.info('Starting API server', {
@@ -93,16 +126,10 @@ async function start() {
       ],
     });
 
+    // Friendly console output for local dev
     console.log(`\n🚀 API ready on http://localhost:${PORT}`);
-    console.log(`\n📌 KEY FEATURES:`);
-    console.log(`   ✅ URL Ingest - Paste any product URL`);
-    console.log(`   ✅ Auto Brand Kit - SVG logos + palettes`);
-    console.log(`   ✅ 3 Concepts - POV, Question, Before/After (fixed seeds)`);
-    console.log(`   ✅ Trend Hooks - Pattern templates`);
-    console.log(`\n🔒 SECURITY:`);
-    console.log(`   ✅ CORS allows:`);
-    allowedOrigins.forEach(o => console.log(`      - ${o.toString()}`));
-    console.log(`   ✅ Structured logging + error monitoring`);
+    console.log(`\n🔒 CORS allows:`);
+    allowedOrigins.forEach(o => console.log(`   • ${o.toString()}`));
   });
 }
 
