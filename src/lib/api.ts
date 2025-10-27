@@ -1,20 +1,30 @@
+// src/lib/api.ts
+
 import type {
   IngestResponse,
   PlanResponse,
   RenderRequest,
   RenderResponse,
   JobStatusResponse,
+  PromptPlanRequest,
+  PromptPlanResponse,
+  PromptRenderRequest,
+  PromptRenderResponse,
+  PromptJobStatusResponse,
 } from '../types/api';
 import { supabase } from './supabase';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+// Normalize API base: prefer VITE_API_URL, fall back to localhost, strip trailing slash
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const API_URL = RAW_API_URL.endsWith('/') ? RAW_API_URL.slice(0, -1) : RAW_API_URL;
+
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === '1';
 
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   return {
     'Content-Type': 'application/json',
-    ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+    ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
   };
 }
 
@@ -25,8 +35,11 @@ const mockVideoUrls = [
 ];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 const mockJobs = new Map<string, JobStatusResponse>();
+
+/* ---------------------------
+   Ingest
+---------------------------- */
 
 export async function ingest(url: string): Promise<IngestResponse> {
   if (USE_MOCK) {
@@ -52,18 +65,29 @@ export async function ingest(url: string): Promise<IngestResponse> {
   }
 
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/api/ingest`, {
+
+  // ✅ Backend route is POST /api/ingest/url
+  const response = await fetch(`${API_URL}/api/ingest/url`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ url }),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to ingest product URL');
+    let err = 'Failed to ingest product URL';
+    try {
+      const j = await response.json();
+      err = j?.error || j?.message || err;
+    } catch { /* ignore */ }
+    throw new Error(err);
   }
 
   return response.json();
 }
+
+/* ---------------------------
+   Plan
+---------------------------- */
 
 export async function plan(
   projectId: string,
@@ -129,8 +153,7 @@ export async function plan(
   const headers = await getAuthHeaders();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const body: any = { projectId, userId: user?.id };
-
+  const body: Record<string, unknown> = { projectId, userId: user?.id };
   if (options?.A) body.overrideHookA = options.A;
   if (options?.B) body.overrideHookB = options.B;
   if (options?.C) body.overrideHookC = options.C;
@@ -146,12 +169,13 @@ export async function plan(
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to generate plan');
-  }
-
+  if (!response.ok) throw new Error('Failed to generate plan');
   return response.json();
 }
+
+/* ---------------------------
+   Renders
+---------------------------- */
 
 export async function renderPreviews(request: RenderRequest): Promise<RenderResponse> {
   if (USE_MOCK) {
@@ -192,11 +216,7 @@ export async function renderPreviews(request: RenderRequest): Promise<RenderResp
       }
     }, 5000);
 
-    return {
-      runId,
-      status: 'queued',
-      variants: mockResponse.variants,
-    };
+    return { runId, status: 'queued', variants: mockResponse.variants };
   }
 
   const headers = await getAuthHeaders();
@@ -206,10 +226,7 @@ export async function renderPreviews(request: RenderRequest): Promise<RenderResp
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to start preview render');
-  }
-
+  if (!response.ok) throw new Error('Failed to start preview render');
   return response.json();
 }
 
@@ -217,23 +234,13 @@ export async function renderFinals(request: RenderRequest): Promise<RenderRespon
   if (USE_MOCK) {
     await sleep(500);
     const runId = `run_final_${Date.now()}`;
-
     const mockResponse: JobStatusResponse = {
       runId,
       status: 'queued',
-      variants: request.variantIds.map(variantId => ({
-        variantId,
-        status: 'queued',
-      })),
+      variants: request.variantIds.map(variantId => ({ variantId, status: 'queued' })),
     };
-
     mockJobs.set(runId, mockResponse);
-
-    return {
-      runId,
-      status: 'queued',
-      variants: mockResponse.variants,
-    };
+    return { runId, status: 'queued', variants: mockResponse.variants };
   }
 
   const headers = await getAuthHeaders();
@@ -243,10 +250,7 @@ export async function renderFinals(request: RenderRequest): Promise<RenderRespon
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to start final render');
-  }
-
+  if (!response.ok) throw new Error('Failed to start final render');
   return response.json();
 }
 
@@ -254,23 +258,21 @@ export async function getJobStatus(runId: string): Promise<JobStatusResponse> {
   if (USE_MOCK) {
     await sleep(300);
     const job = mockJobs.get(runId);
-    if (!job) {
-      throw new Error('Job not found');
-    }
+    if (!job) throw new Error('Job not found');
     return job;
   }
 
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/jobs/${runId}`, { headers });
-
-  if (!response.ok) {
-    throw new Error('Failed to get job status');
-  }
-
+  if (!response.ok) throw new Error('Failed to get job status');
   return response.json();
 }
 
-export async function promptPlan(request: import('../types/api').PromptPlanRequest): Promise<import('../types/api').PromptPlanResponse> {
+/* ---------------------------
+   Prompt-based planner/renders
+---------------------------- */
+
+export async function promptPlan(request: PromptPlanRequest): Promise<PromptPlanResponse> {
   if (USE_MOCK) {
     await sleep(1000);
     return {
@@ -298,20 +300,14 @@ export async function promptPlan(request: import('../types/api').PromptPlanReque
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to generate prompt plan');
-  }
-
+  if (!response.ok) throw new Error('Failed to generate prompt plan');
   return response.json();
 }
 
-export async function promptRenderPreview(request: import('../types/api').PromptRenderRequest): Promise<import('../types/api').PromptRenderResponse> {
+export async function promptRenderPreview(request: PromptRenderRequest): Promise<PromptRenderResponse> {
   if (USE_MOCK) {
     await sleep(500);
-    return {
-      runId: `run_prompt_${Date.now()}`,
-      status: 'queued',
-    };
+    return { runId: `run_prompt_${Date.now()}`, status: 'queued' };
   }
 
   const headers = await getAuthHeaders();
@@ -332,13 +328,10 @@ export async function promptRenderPreview(request: import('../types/api').Prompt
   return response.json();
 }
 
-export async function promptRenderFinal(request: import('../types/api').PromptRenderRequest): Promise<import('../types/api').PromptRenderResponse> {
+export async function promptRenderFinal(request: PromptRenderRequest): Promise<PromptRenderResponse> {
   if (USE_MOCK) {
     await sleep(500);
-    return {
-      runId: `run_prompt_final_${Date.now()}`,
-      status: 'queued',
-    };
+    return { runId: `run_prompt_final_${Date.now()}`, status: 'queued' };
   }
 
   const headers = await getAuthHeaders();
@@ -359,7 +352,7 @@ export async function promptRenderFinal(request: import('../types/api').PromptRe
   return response.json();
 }
 
-export async function getPromptJobStatus(runId: string): Promise<import('../types/api').PromptJobStatusResponse> {
+export async function getPromptJobStatus(runId: string): Promise<PromptJobStatusResponse> {
   if (USE_MOCK) {
     await sleep(300);
     return {
@@ -372,13 +365,13 @@ export async function getPromptJobStatus(runId: string): Promise<import('../type
 
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/api/prompt/jobs/${runId}`, { headers });
-
-  if (!response.ok) {
-    throw new Error('Failed to get prompt job status');
-  }
-
+  if (!response.ok) throw new Error('Failed to get prompt job status');
   return response.json();
 }
+
+/* ---------------------------
+   Asset/reference endpoints
+---------------------------- */
 
 export async function uploadReferenceImage(
   variantId: string,
@@ -404,7 +397,7 @@ export async function uploadReferenceImage(
     {
       method: 'POST',
       headers: {
-        ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+        ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
       },
       body: formData,
     }
@@ -435,10 +428,7 @@ export async function getReferenceImages(variantId: string): Promise<{
     headers,
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch reference images');
-  }
-
+  if (!response.ok) throw new Error('Failed to fetch reference images');
   return response.json();
 }
 
@@ -455,10 +445,7 @@ export async function deleteReferenceImage(
     }
   );
 
-  if (!response.ok) {
-    throw new Error('Failed to delete reference image');
-  }
-
+  if (!response.ok) throw new Error('Failed to delete reference image');
   return response.json();
 }
 
@@ -511,9 +498,6 @@ export async function getBeatQuality(beatGenerationId: string): Promise<{
     headers,
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch beat quality');
-  }
-
+  if (!response.ok) throw new Error('Failed to fetch beat quality');
   return response.json();
 }
