@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { Logger } from './logger';
+import { templateMatcher } from './template-matcher';
 
 const logger = new Logger({ module: 'static-renderer' });
 
@@ -13,6 +14,8 @@ export interface StaticRenderOptions {
   ctaText: string;
   position: 'top' | 'center' | 'bottom';
   logoPngUrl?: string;
+  templateId?: string;
+  productName?: string;
 }
 
 function truncateToWords(text: string, maxWords: number): string {
@@ -54,7 +57,18 @@ export async function renderStaticPNG(options: StaticRenderOptions): Promise<Buf
     ctaText,
     position,
     logoPngUrl,
+    templateId,
+    productName,
   } = options;
+
+  let template = null;
+  if (templateId) {
+    template = await templateMatcher.getTemplateById(templateId);
+    logger.info('Using template for static render', {
+      templateId,
+      templateName: template?.template_name
+    });
+  }
 
   logger.info('Rendering static PNG', {
     width,
@@ -62,6 +76,7 @@ export async function renderStaticPNG(options: StaticRenderOptions): Promise<Buf
     hasBackground: !!backgroundImageUrl,
     position,
     hookLength: hookText.length,
+    usingTemplate: !!template
   });
 
   const hookTextTruncated = truncateToWords(hookText, 6);
