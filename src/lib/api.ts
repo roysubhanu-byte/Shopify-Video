@@ -13,12 +13,7 @@ import type {
   PromptJobStatusResponse,
 } from '../types/api';
 import { supabase } from './supabase';
-
-// Normalize API base: prefer VITE_API_URL, fall back to localhost, strip trailing slash
-const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
-const API_URL = RAW_API_URL.endsWith('/') ? RAW_API_URL.slice(0, -1) : RAW_API_URL;
-
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === '1';
+import { API_URL, USE_MOCK } from './config';
 
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();

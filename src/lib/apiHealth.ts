@@ -1,6 +1,12 @@
+import { API_URL } from './config';
+
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const response = await fetch('/api/healthz', {
+    const healthUrl = import.meta.env.DEV
+      ? '/api/healthz'
+      : `${API_URL}/healthz`;
+
+    const response = await fetch(healthUrl, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),
     });

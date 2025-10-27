@@ -18,15 +18,30 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8787;
 
-const allowedOrigin = process.env.APP_URL || 'http://localhost:5173';
+const allowedOrigins = [
+  process.env.APP_URL,
+  /^https:\/\/.*\.vercel\.app$/,
+  'http://localhost:5173',
+  'http://localhost:4173',
+].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (origin === allowedOrigin) {
+
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
+      } else if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
       callback(null, true);
     } else {
-      logger.warn('CORS blocked origin', { origin, allowed: allowedOrigin });
+      logger.warn('CORS blocked origin', { origin, allowedOrigins: allowedOrigins.map(o => o.toString()) });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -56,7 +71,7 @@ async function start() {
   logger.info('Starting API server', {
     port: PORT,
     nodeEnv: process.env.NODE_ENV || 'development',
-    appUrl: allowedOrigin,
+    allowedOrigins: allowedOrigins.map(o => o.toString()),
   });
 
   app.listen(PORT, () => {
@@ -85,7 +100,8 @@ async function start() {
     console.log(`   ✅ 3 Concepts - POV, Question, Before/After (fixed seeds)`);
     console.log(`   ✅ Trend Hooks - Pattern templates`);
     console.log(`\n🔒 SECURITY:`);
-    console.log(`   ✅ CORS locked to: ${allowedOrigin}`);
+    console.log(`   ✅ CORS allows:`);
+    allowedOrigins.forEach(o => console.log(`      - ${o.toString()}`));
     console.log(`   ✅ Structured logging + error monitoring`);
   });
 }
