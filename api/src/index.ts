@@ -11,6 +11,7 @@ import productsRouter from './routes/products';
 import hooksRouter from './routes/hooks';
 import staticRouter from './routes/static';
 import frameworksRouter from './routes/frameworks';
+import beatsRouter from './routes/beats';
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use(productsRouter);
 app.use(hooksRouter);
 app.use(staticRouter);
 app.use(frameworksRouter);
+app.use(beatsRouter);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Server error', err, { endpoint: req.path, method: req.method });
