@@ -18,6 +18,8 @@ import { useStore } from '../store/useStore';
 import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
 import { i18n } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
+// ⬇️ Needed to avoid relative API calls in production
+import { API_URL } from '../lib/config';
 
 interface Asset {
   id: string;
@@ -38,7 +40,8 @@ type FlowStep =
   | 'hooks'
   | 'concepts';
 
-export function CreatePage() {
+// ⬇️ Export *default* inline (fixes Vercel import error)
+export default function CreatePage() {
   const credits = useUserCredits();
   const navigate = useNavigate();
 
@@ -56,7 +59,9 @@ export function CreatePage() {
   const [framework, setFramework] = useState<string | undefined>();
   const [customHooks, setCustomHooks] = useState<{ A?: string; B?: string; C?: string }>({});
   const [generatingStatic, setGeneratingStatic] = useState<Set<string>>(new Set());
-  const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>
+  >([]);
   const [showCreditDialog, setShowCreditDialog] = useState(false);
   const [creditError, setCreditError] = useState<{ needed: number; current: number } | null>(null);
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
@@ -79,7 +84,6 @@ export function CreatePage() {
   } = useStore();
 
   const handleUrlSubmit = async (url: string, vertical: string) => {
-    // Always show product picker to let users select which product to use
     setPendingUrl({ url, vertical });
     setShowProductPicker(true);
   };
@@ -92,7 +96,6 @@ export function CreatePage() {
   const processIngest = async (url: string, _vertical: string, _selectedProduct: any) => {
     setIsIngesting(true);
     try {
-      // Pre-flight check: Verify user is authenticated
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -103,7 +106,6 @@ export function CreatePage() {
         return;
       }
 
-      // Validate URL
       if (!url || url.trim().length === 0) {
         addToast('error', 'Please enter a valid product URL');
         return;
@@ -122,7 +124,6 @@ export function CreatePage() {
       console.error('Error ingesting URL:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
 
-      // Check if error is authentication related
       if (
         errorMessage.includes('sign in') ||
         errorMessage.includes('session') ||
@@ -194,7 +195,7 @@ export function CreatePage() {
     setCurrentStep('concepts');
 
     try {
-      const planData = await plan(projectId, {
+      await plan(projectId, {
         A: customHooks.A,
         B: customHooks.B,
         C: customHooks.C,
@@ -206,7 +207,6 @@ export function CreatePage() {
       });
 
       const variantsResponse = await supabase.from('variants').select('*').eq('project_id', projectId);
-
       if (variantsResponse.data) {
         setVariants(variantsResponse.data as any);
       }
@@ -265,8 +265,6 @@ export function CreatePage() {
   const addToast = (type: 'success' | 'error' | 'info', message: string) => {
     const id = `toast_${Date.now()}`;
     setToasts((prev) => [...prev, { id, type, message }]);
-
-    // Auto-dismiss success and info toasts after 5 seconds
     if (type === 'success' || type === 'info') {
       setTimeout(() => removeToast(id), 5000);
     }
@@ -285,8 +283,8 @@ export function CreatePage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // NOTE: if you deploy frontend separately from the API, consider using API_URL here
-      const response = await fetch('/api/render/static', {
+      // ⬇️ Use absolute API URL so this works in production
+      const response = await fetch(`${API_URL}/api/render/static`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variantId, userId: user?.id }),
@@ -509,7 +507,11 @@ export function CreatePage() {
         ) : currentStep === 'output-type' ? (
           <OutputTypeStep onComplete={handleOutputTypeComplete} initialOutputType={outputType || undefined} />
         ) : currentStep === 'creation-mode' ? (
-          <CreationModeStep productData={productData} onComplete={handleCreationModeComplete} outputType={outputType || 'video'} />
+          <CreationModeStep
+            productData={productData}
+            onComplete={handleCreationModeComplete}
+            outputType={outputType || 'video'}
+          />
         ) : currentStep === 'hooks' ? (
           <div className="space-y-8">
             <div className="text-center mb-8">
@@ -517,7 +519,10 @@ export function CreatePage() {
               <p className="text-slate-400">Select trending hooks or create custom ones (optional)</p>
             </div>
 
-            <HooksPanel vertical={(productData as any)?.vertical || 'general'} onCustomHooksChange={setCustomHooks} />
+            <HooksPanel
+              vertical={(productData as any)?.vertical || 'general'}
+              onCustomHooksChange={setCustomHooks}
+            />
 
             <div className="flex justify-center">
               <button
@@ -620,7 +625,8 @@ export function CreatePage() {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Insufficient Credits</h3>
             <p className="text-gray-700 mb-6">
-              You need {creditError.needed} credits to generate static images, but you only have {creditError.current} credits remaining.
+              You need {creditError.needed} credits to generate static images, but you only have {creditError.current}{' '}
+              credits remaining.
             </p>
             <div className="flex gap-3">
               <button
@@ -651,6 +657,3 @@ export function CreatePage() {
     </div>
   );
 }
-
-// ⬇️ ADD THIS LINE
-export default CreatePage;
