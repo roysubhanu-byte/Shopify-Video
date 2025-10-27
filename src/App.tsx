@@ -5,7 +5,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { SignInPage } from './pages/SignInPage';
 import { SignUpPage } from './pages/SignUpPage';
-import { CreatePage } from './pages/CreatePage';
+// ⬇️ Import the *default* export (no braces)
+import CreatePage from './pages/CreatePage';
 import { PromptPage } from './pages/PromptPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { BillingPage } from './pages/BillingPage';
@@ -23,10 +24,10 @@ function App() {
       if (!isHealthy) {
         console.warn(
           '⚠️ API server is not running.\n' +
-          'To start both frontend and backend, run:\n' +
-          '  npm run dev:full\n\n' +
-          'Current setup only runs the frontend (Vite) server.\n' +
-          'The backend API server at http://localhost:8787 is required for full functionality.'
+            'To start both frontend and backend, run:\n' +
+            '  npm run dev:full\n\n' +
+            'Current setup only runs the frontend (Vite) server.\n' +
+            'The backend API server at http://localhost:8787 is required for full functionality.'
         );
       } else {
         console.info('✅ API server is running at http://localhost:8787');
@@ -51,10 +52,38 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignUpPage />} />
-        <Route path="/create" element={<ProtectedRoute><CreatePage /></ProtectedRoute>} />
-        <Route path="/prompt" element={<ProtectedRoute><PromptPage /></ProtectedRoute>} />
-        <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
-        <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
+        <Route
+          path="/create"
+          element={
+            <ProtectedRoute>
+              <CreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/prompt"
+          element={
+            <ProtectedRoute>
+              <PromptPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/library"
+          element={
+            <ProtectedRoute>
+              <LibraryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/billing"
+          element={
+            <ProtectedRoute>
+              <BillingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/examples" element={<ExamplesPage />} />
         <Route path="/how-it-works" element={<DocsPage />} />
