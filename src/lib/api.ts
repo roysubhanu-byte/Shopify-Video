@@ -64,28 +64,57 @@ export async function ingest(url: string): Promise<IngestResponse> {
     };
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Validate URL format before proceeding
+  if (!url || typeof url !== 'string' || url.trim().length === 0) {
+    throw new Error('Please enter a valid product URL');
+  }
 
-  if (!user) {
-    throw new Error('You must be signed in to use this feature. Please sign in and try again.');
+  // Check authentication session first
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    throw new Error('Your session has expired. Please sign in again to continue.');
+  }
+
+  // Get user details
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user || !user.id) {
+    throw new Error('Unable to verify your account. Please sign in again.');
+  }
+
+  // Validate we have all required data before making the request
+  if (!user.id) {
+    throw new Error('Authentication error: User ID not found. Please sign out and sign in again.');
   }
 
   const headers = await getAuthHeaders();
+
+  // Log the request for debugging (remove in production)
+  console.log('Ingest request:', { url: url.substring(0, 50), userId: user.id.substring(0, 8) + '...' });
 
   // ✅ Backend route is POST /api/ingest/url
   const response = await fetch(`${API_URL}/api/ingest/url`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ url, userId: user.id }),
+    body: JSON.stringify({ url: url.trim(), userId: user.id }),
   });
 
   if (!response.ok) {
     let err = 'Failed to ingest product URL';
     try {
       const j = await response.json();
-      err = j?.error || j?.details || j?.message || err;
-      if (j?.suggestion) {
-        err = `${err}\n\n${j.suggestion}`;
+
+      // Handle specific error cases
+      if (response.status === 400 && j?.required) {
+        err = `Missing required information: ${j.required.join(', ')}. Please sign out and sign in again.`;
+      } else if (response.status === 401 || response.status === 403) {
+        err = 'Authentication failed. Please sign in again to continue.';
+      } else {
+        err = j?.error || j?.details || j?.message || err;
+        if (j?.suggestion) {
+          err = `${err}\n\n${j.suggestion}`;
+        }
       }
     } catch { /* ignore */ }
     throw new Error(err);

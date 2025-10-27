@@ -13,10 +13,24 @@ router.post('/api/ingest/url', async (req, res) => {
   try {
     const { url, userId } = req.body;
 
+    // Log received request for debugging
+    logger.info('Received ingest request', {
+      hasUrl: !!url,
+      hasUserId: !!userId,
+      urlType: typeof url,
+      userIdType: typeof userId,
+    });
+
     if (!url || !userId) {
+      const missing = [];
+      if (!url) missing.push('url');
+      if (!userId) missing.push('userId');
+
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['url', 'userId'],
+        missing,
+        message: `Please provide: ${missing.join(', ')}. You may need to sign in again.`,
       });
     }
 

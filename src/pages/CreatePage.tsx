@@ -91,6 +91,21 @@ export function CreatePage() {
     setIsIngesting(true);
 
     try {
+      // Pre-flight check: Verify user is authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        addToast('error', 'Your session has expired. Please sign in again.');
+        setTimeout(() => navigate('/signin'), 2000);
+        return;
+      }
+
+      // Validate URL
+      if (!url || url.trim().length === 0) {
+        addToast('error', 'Please enter a valid product URL');
+        return;
+      }
+
       const ingestData = await ingest(url);
       setProjectData(ingestData);
 
@@ -99,10 +114,18 @@ export function CreatePage() {
       }
 
       setCurrentStep('brand-guidelines');
+      addToast('success', 'Product loaded successfully!');
     } catch (error) {
       console.error('Error ingesting URL:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
-      addToast('error', errorMessage);
+
+      // Check if error is authentication related
+      if (errorMessage.includes('sign in') || errorMessage.includes('session') || errorMessage.includes('Authentication')) {
+        addToast('error', errorMessage);
+        setTimeout(() => navigate('/signin'), 3000);
+      } else {
+        addToast('error', errorMessage);
+      }
     } finally {
       setIsIngesting(false);
     }
@@ -228,6 +251,11 @@ export function CreatePage() {
   const addToast = (type: 'success' | 'error' | 'info', message: string) => {
     const id = `toast_${Date.now()}`;
     setToasts(prev => [...prev, { id, type, message }]);
+
+    // Auto-dismiss success and info toasts after 5 seconds
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => removeToast(id), 5000);
+    }
   };
 
   const removeToast = (id: string) => {

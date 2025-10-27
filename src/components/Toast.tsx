@@ -10,12 +10,14 @@ export interface ToastProps {
 
 export function Toast({ id, type, message, onClose }: ToastProps) {
   useEffect(() => {
+    // Error toasts should stay longer (8 seconds) to ensure user sees them
+    const duration = type === 'error' ? 8000 : 5000;
     const timer = setTimeout(() => {
       onClose(id);
-    }, 5000);
+    }, duration);
 
     return () => clearTimeout(timer);
-  }, [id, onClose]);
+  }, [id, type, onClose]);
 
   const icons = {
     success: <CheckCircle className="w-5 h-5 text-green-500" />,
@@ -37,13 +39,13 @@ export function Toast({ id, type, message, onClose }: ToastProps) {
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${bgColors[type]} shadow-lg animate-slide-up`}
+      className={`flex items-start gap-3 px-4 py-3 rounded-lg border ${bgColors[type]} shadow-lg animate-slide-up min-w-[320px] max-w-md`}
     >
-      {icons[type]}
-      <p className={`flex-1 text-sm font-medium ${textColors[type]}`}>{message}</p>
+      <div className="mt-0.5">{icons[type]}</div>
+      <p className={`flex-1 text-sm font-medium ${textColors[type]} whitespace-pre-line`}>{message}</p>
       <button
         onClick={() => onClose(id)}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
+        className="text-gray-400 hover:text-gray-600 transition-colors mt-0.5 flex-shrink-0"
       >
         <X className="w-4 h-4" />
       </button>
