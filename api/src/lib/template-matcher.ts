@@ -1,4 +1,4 @@
-import { getSupabaseClient } from './supabase';
+import { supabase } from './supabase';
 import { logger } from './logger';
 
 interface StaticAdTemplate {
@@ -30,11 +30,12 @@ interface ProductData {
 }
 
 export class TemplateMatcher {
-  private supabase = getSupabaseClient();
+  // use the shared singleton supabase client
+  private db = supabase;
 
   async findBestTemplate(productData: ProductData): Promise<StaticAdTemplate | null> {
     try {
-      const { data: templates, error } = await this.supabase
+      const { data: templates, error } = await this.db
         .from('static_ad_templates')
         .select('*')
         .order('engagement_score', { ascending: false });
@@ -44,9 +45,9 @@ export class TemplateMatcher {
         return null;
       }
 
-      const scoredTemplates = templates.map(template => ({
+      const scoredTemplates = templates.map((template) => ({
         template,
-        score: this.calculateMatchScore(template, productData)
+        score: this.calculateMatchScore(template, productData),
       }));
 
       scoredTemplates.sort((a, b) => b.score - a.score);
@@ -54,7 +55,7 @@ export class TemplateMatcher {
       logger.info('Template matching results', {
         product: productData.title,
         topMatch: scoredTemplates[0]?.template.template_name,
-        score: scoredTemplates[0]?.score
+        score: scoredTemplates[0]?.score,
       });
 
       return scoredTemplates[0]?.template || null;
@@ -66,7 +67,7 @@ export class TemplateMatcher {
 
   async findTemplatesByCategory(category: string, limit: number = 5): Promise<StaticAdTemplate[]> {
     try {
-      const { data: templates, error } = await this.supabase
+      const { data: templates, error } = await this.db
         .from('static_ad_templates')
         .select('*')
         .eq('category', category)
@@ -87,7 +88,7 @@ export class TemplateMatcher {
 
   async getTemplateById(templateId: string): Promise<StaticAdTemplate | null> {
     try {
-      const { data: template, error } = await this.supabase
+      const { data: template, error } = await this.db
         .from('static_ad_templates')
         .select('*')
         .eq('id', templateId)
@@ -122,14 +123,14 @@ export class TemplateMatcher {
     const templateCategory = template.category.toLowerCase();
 
     const categoryMap: Record<string, string[]> = {
-      'athletic': ['sports', 'fitness', 'gym', 'athletic', 'running', 'workout', 'training'],
-      'tech': ['technology', 'electronics', 'gadget', 'device', 'computer', 'phone', 'tech'],
-      'luxury': ['luxury', 'premium', 'high-end', 'designer', 'exclusive', 'elegant'],
-      'food_beverage': ['food', 'beverage', 'drink', 'snack', 'meal', 'restaurant', 'cafe'],
-      'fashion_lifestyle': ['fashion', 'clothing', 'apparel', 'style', 'wear', 'accessory'],
-      'beauty_wellness': ['beauty', 'cosmetics', 'skincare', 'wellness', 'health', 'spa'],
-      'automotive': ['car', 'vehicle', 'automotive', 'auto', 'motorcycle', 'transport'],
-      'minimal_clean': ['minimal', 'simple', 'clean', 'basic', 'essential', 'functional']
+      athletic: ['sports', 'fitness', 'gym', 'athletic', 'running', 'workout', 'training'],
+      tech: ['technology', 'electronics', 'gadget', 'device', 'computer', 'phone', 'tech'],
+      luxury: ['luxury', 'premium', 'high-end', 'designer', 'exclusive', 'elegant'],
+      food_beverage: ['food', 'beverage', 'drink', 'snack', 'meal', 'restaurant', 'cafe'],
+      fashion_lifestyle: ['fashion', 'clothing', 'apparel', 'style', 'wear', 'accessory'],
+      beauty_wellness: ['beauty', 'cosmetics', 'skincare', 'wellness', 'health', 'spa'],
+      automotive: ['car', 'vehicle', 'automotive', 'auto', 'motorcycle', 'transport'],
+      minimal_clean: ['minimal', 'simple', 'clean', 'basic', 'essential', 'functional'],
     };
 
     const templateCategories = categoryMap[templateCategory] || [];
@@ -142,15 +143,17 @@ export class TemplateMatcher {
 
     if (template.best_for_products) {
       for (const bestFor of template.best_for_products) {
-        if (productCategory.includes(bestFor.toLowerCase()) ||
-            productData.title.toLowerCase().includes(bestFor.toLowerCase())) {
+        if (
+          productCategory.includes(bestFor.toLowerCase()) ||
+          productData.title.toLowerCase().includes(bestFor.toLowerCase())
+        ) {
           return 35;
         }
       }
     }
 
     return 0;
-  }
+    }
 
   private keywordMatchScore(template: StaticAdTemplate, productData: ProductData): number {
     const productText = `${productData.title} ${productData.description || ''}`.toLowerCase();
@@ -180,12 +183,12 @@ export class TemplateMatcher {
     if (!brandTone) return 0;
 
     const toneMap: Record<string, string[]> = {
-      'luxury': ['luxury', 'premium', 'elegant', 'refined', 'prestigious'],
-      'bold': ['bold', 'dynamic', 'energetic', 'powerful', 'strong'],
-      'minimal': ['minimal', 'clean', 'simple', 'refined', 'minimal'],
-      'playful': ['playful', 'fun', 'quirky', 'colorful', 'friendly'],
-      'professional': ['professional', 'corporate', 'technical', 'trustworthy'],
-      'natural': ['natural', 'organic', 'sustainable', 'authentic', 'earth']
+      luxury: ['luxury', 'premium', 'elegant', 'refined', 'prestigious'],
+      bold: ['bold', 'dynamic', 'energetic', 'powerful', 'strong'],
+      minimal: ['minimal', 'clean', 'simple', 'refined', 'minimal'],
+      playful: ['playful', 'fun', 'quirky', 'colorful', 'friendly'],
+      professional: ['professional', 'corporate', 'technical', 'trustworthy'],
+      natural: ['natural', 'organic', 'sustainable', 'authentic', 'earth'],
     };
 
     for (const [tone, keywords] of Object.entries(toneMap)) {
@@ -216,8 +219,14 @@ export class TemplateMatcher {
     const isBudget = price < 30;
 
     const templateName = template.template_name.toLowerCase();
-    const isLuxuryTemplate = template.category === 'luxury' || templateName.includes('premium') || templateName.includes('luxury');
-    const isAccessibleTemplate = templateName.includes('accessible') || templateName.includes('simple') || templateName.includes('democratic');
+    const isLuxuryTemplate =
+      template.category === 'luxury' ||
+      templateName.includes('premium') ||
+      templateName.includes('luxury');
+    const isAccessibleTemplate =
+      templateName.includes('accessible') ||
+      templateName.includes('simple') ||
+      templateName.includes('democratic');
 
     if (isPremium && isLuxuryTemplate) return 15;
     if (isBudget && isAccessibleTemplate) return 15;
@@ -231,7 +240,7 @@ export class TemplateMatcher {
     count: number = 3
   ): Promise<StaticAdTemplate[]> {
     try {
-      const { data: templates, error } = await this.supabase
+      const { data: templates, error } = await this.db
         .from('static_ad_templates')
         .select('*')
         .order('engagement_score', { ascending: false });
@@ -241,19 +250,19 @@ export class TemplateMatcher {
         return [];
       }
 
-      const scoredTemplates = templates.map(template => ({
+      const scoredTemplates = templates.map((template) => ({
         template,
-        score: this.calculateMatchScore(template, productData)
+        score: this.calculateMatchScore(template, productData),
       }));
 
       scoredTemplates.sort((a, b) => b.score - a.score);
 
-      const recommendations = scoredTemplates.slice(0, count).map(st => st.template);
+      const recommendations = scoredTemplates.slice(0, count).map((st) => st.template);
 
       logger.info('Template recommendations generated', {
         product: productData.title,
-        recommendations: recommendations.map(r => r.template_name),
-        count
+        recommendations: recommendations.map((r) => r.template_name),
+        count,
       });
 
       return recommendations;
