@@ -1,11 +1,13 @@
+// src/components/ProductPickerModal.tsx
 import { useState, useEffect } from 'react';
 import { X, Search, ShoppingBag } from 'lucide-react';
+import { API_URL } from '../lib/config'; // ⬅️ make sure this exists (you already have it)
 
 interface Product {
   id: string | number;
   handle: string;
   title: string;
-  price: string;
+  price: string; // backend sends string; if number, we stringify below
   images: string[];
 }
 
@@ -26,6 +28,7 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
     if (open && shopUrl) {
       fetchProducts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, shopUrl]);
 
   const fetchProducts = async (query?: string) => {
@@ -33,33 +36,41 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        shopUrl,
-        ...(query && { q: query }),
-      });
+      // Build absolute URL against the API origin
+      const url =
+        `${API_URL}/api/products?shopUrl=${encodeURIComponent(shopUrl)}` +
+        (query ? `&q=${encodeURIComponent(query)}` : '');
 
-      const response = await fetch(`/api/products?${params}`);
+      const response = await fetch(url, { credentials: 'include' });
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(
-          'API server is not running. Please start both servers with: npm run dev:full'
-        );
+      // Handle HTTP errors
+      if (!response.ok) {
+        let message = 'Failed to fetch products';
+        try {
+          const j = await response.json();
+          message = j?.error || j?.message || message;
+        } catch { /* ignore */ }
+        throw new Error(message);
       }
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch products');
-      }
+      // API returns { success, isShopify, count, items: [...] }
+      const items = Array.isArray(data?.items) ? data.items : [];
 
-      setProducts(data.items || []);
+      // normalize just in case (price can be number, images can be empty)
+      const normalized: Product[] = items.map((p: any) => ({
+        id: p.id ?? p.handle ?? crypto.randomUUID(),
+        handle: p.handle ?? '',
+        title: p.title ?? 'Untitled Product',
+        price: typeof p.price === 'number' ? p.price.toFixed(2) : String(p.price ?? '0.00'),
+        images: Array.isArray(p.images) ? p.images : [],
+      }));
+
+      setProducts(normalized);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to load products. Make sure the API server is running (npm run dev:full)');
-      }
+      setProducts([]);
+      setError(err instanceof Error ? err.message : 'Failed to load products.');
     } finally {
       setLoading(false);
     }
@@ -73,7 +84,7 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden border border-slate-700">
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
@@ -83,10 +94,7 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
               <p className="text-sm text-slate-400 mt-1">Select a product to create ads for</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -116,12 +124,12 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
           )}
 
           {error && (
-            <div className="bg-red-950 bg-opacity-30 border border-red-800 rounded-lg p-4 text-red-200">
+            <div className="bg-red-950/30 border border-red-800 rounded-lg p-4 text-red-200">
               {error}
             </div>
           )}
@@ -141,7 +149,7 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
                   key={product.id}
                   className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800 hover:border-blue-500 transition-all"
                 >
-                  {product.images[0] ? (
+                  {product.images?.[0] ? (
                     <img
                       src={product.images[0]}
                       alt={product.title}
@@ -153,10 +161,10 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
                     </div>
                   )}
                   <div className="p-4">
-                    <h3 className="font-semibold text-white mb-2 line-clamp-2">
-                      {product.title}
-                    </h3>
-                    <p className="text-blue-400 font-bold mb-3">${product.price}</p>
+                    <h3 className="font-semibold text-white mb-2 line-clamp-2">{product.title}</h3>
+                    <p className="text-blue-400 font-bold mb-3">
+                      ${/^\d/.test(product.price) ? product.price : '0.00'}
+                    </p>
                     <button
                       onClick={() => {
                         onSelect(product);
