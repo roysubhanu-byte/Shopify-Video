@@ -379,3 +379,141 @@ export async function getPromptJobStatus(runId: string): Promise<import('../type
 
   return response.json();
 }
+
+export async function uploadReferenceImage(
+  variantId: string,
+  beatNumber: number,
+  imageFile: File
+): Promise<{
+  success: boolean;
+  override: {
+    id: string;
+    beatNumber: number;
+    publicUrl: string;
+    thumbnailUrl: string;
+    width?: number;
+    height?: number;
+  };
+}> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  const response = await fetch(
+    `${API_URL}/api/beats/${variantId}/${beatNumber}/upload-reference`,
+    {
+      method: 'POST',
+      headers: {
+        ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` }),
+      },
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to upload reference image' }));
+    throw new Error(error.error || 'Failed to upload reference image');
+  }
+
+  return response.json();
+}
+
+export async function getReferenceImages(variantId: string): Promise<{
+  variantId: string;
+  referenceImages: Array<{
+    id: string;
+    beat_number: number;
+    public_url: string;
+    thumbnail_url: string;
+    original_filename: string;
+    width?: number;
+    height?: number;
+  }>;
+}> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/variants/${variantId}/reference-images`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch reference images');
+  }
+
+  return response.json();
+}
+
+export async function deleteReferenceImage(
+  variantId: string,
+  beatNumber: number
+): Promise<{ success: boolean; message: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(
+    `${API_URL}/api/beats/${variantId}/${beatNumber}/reference-image`,
+    {
+      method: 'DELETE',
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to delete reference image');
+  }
+
+  return response.json();
+}
+
+export async function reshootBeat(
+  beatGenerationId: string,
+  options: {
+    reason: string;
+    reasonCategory?: 'quality_issue' | 'wrong_product' | 'bad_composition' | 'text_issue' | 'creative_direction' | 'other';
+    promptModifications?: string;
+    newReferenceImageUrl?: string;
+    newSeed?: number;
+  }
+): Promise<{
+  success: boolean;
+  reshootId: string;
+  newBeatGenerationId: string;
+  creditsCharged: number;
+  creditsRemaining: number;
+  message: string;
+}> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/beats/${beatGenerationId}/reshoot`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(options),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to reshoot beat' }));
+    throw new Error(error.error || 'Failed to reshoot beat');
+  }
+
+  return response.json();
+}
+
+export async function getBeatQuality(beatGenerationId: string): Promise<{
+  beatGenerationId: string;
+  validations: Array<{
+    id: string;
+    validation_type: string;
+    passed: boolean;
+    score: number;
+    issues_found: string[];
+    suggestions: string[];
+    created_at: string;
+  }>;
+}> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/beats/${beatGenerationId}/quality`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch beat quality');
+  }
+
+  return response.json();
+}
