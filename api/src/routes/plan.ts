@@ -403,7 +403,7 @@ function buildBeatsForConcept(
     duration: beatDuration,
     assetRefs: [assetRefs[0]],
     visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'hook'),
-    cameraMovement: 'dynamic',
+    cameraMovement: 'dynamic', // allowed in union
     overlays: [
       {
         text: truncateToWords(hookText, 6),
@@ -436,7 +436,7 @@ function buildBeatsForConcept(
     duration: beatDuration,
     assetRefs: [assetRefs[1] || assetRefs[0]],
     visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'demo'),
-    cameraMovement: 'pan',
+    cameraMovement: 'whip-pan', // was 'pan'
     voiceOver: {
       text: feature1.substring(0, 100),
       startTime: 6,
@@ -477,7 +477,7 @@ function buildBeatsForConcept(
     duration: beatDuration,
     assetRefs: [assetRefs[2] || assetRefs[1] || assetRefs[0]],
     visualStyle: enhancedPrompt ? enhancedPrompt.visualStyle : getVisualStyle(conceptType, 'proof'),
-    cameraMovement: 'zoom',
+    cameraMovement: 'push-in', // was 'zoom'
     voiceOver: {
       text: feature2.substring(0, 100),
       startTime: 12,
