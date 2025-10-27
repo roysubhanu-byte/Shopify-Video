@@ -4,26 +4,25 @@ import { API_URL } from '../lib/config';
 
 type HookItem = {
   id: string;
-  label: string;          // human friendly name/tag
-  text: string;           // the actual hook text to use
+  label: string;
+  text: string;
   vertical?: string;
 };
 
 const DEFAULT_HOOKS: HookItem[] = [
   { id: 'pov',            label: 'POV',             text: 'POV: You finally found the perfect {{product}}.' },
-  { id: 'question',       label: 'Question',        text: 'Question: What if this changed everything about {{pain_point}}?' },
-  { id: 'before_after',   label: 'Before/After',    text: 'Before: {{problem}}. After: {{result}}.' },
-  { id: 'routine',        label: 'POV – Routine',   text: 'POV: Your morning routine got easier with {{product}}.' },
-  { id: 'stop_doing',     label: 'Stop Doing',      text: 'Stop doing this: stop wasting money on {{alternative}}—here’s why.' },
-  { id: 'did_you_know',   label: 'Did you know?',   text: 'Did you know? Most people skip this step and lose out on {{benefit}}.' },
-  { id: 'try_this',       label: 'Try this',        text: 'This is your sign: try something that actually works—{{product}}.' },
-  { id: 'secret',         label: 'Secret',          text: 'The secret to better results in half the time: {{product}}.' },
-  { id: 'struggle',       label: 'Struggle',        text: 'If you struggle with {{pain_point}}: this changes everything.' },
-  { id: 'obsessed',       label: 'Everyone is obsessed', text: 'Everyone is obsessed: this simple upgrade to {{product_category}}.' },
+  { id: 'question',       label: 'Question',        text: 'What if {{benefit}} changed everything?' },
+  { id: 'before_after',   label: 'Before/After',    text: 'Before: {{problem}} → After: {{result}}.' },
+  { id: 'routine',        label: 'POV – Routine',   text: 'Your morning routine got easier with {{product}}.' },
+  { id: 'stop_doing',     label: 'Stop doing',      text: 'Stop doing {{mundane_task}}. Do this instead.' },
+  { id: 'did_you_know',   label: 'Did you know?',   text: 'Most people skip {{step}} and lose out on {{benefit}}.' },
+  { id: 'try_this',       label: 'Try this',        text: 'This is your sign: try {{product}} that actually works.' },
+  { id: 'secret',         label: 'The secret',      text: 'The secret to better {{result}} in half the time.' },
+  { id: 'struggle',       label: 'If you struggle', text: 'If you struggle with {{pain_point}}: this changes everything.' },
+  { id: 'obsessed',       label: 'Everyone is obsessed', text: 'Everyone is obsessed with this simple upgrade.' },
 ];
 
 function normalizeHooks(payload: unknown, vertical?: string): HookItem[] {
-  // Accept either {items:[…]} or just […]; each item may have different field names.
   const raw = Array.isArray(payload)
     ? payload
     : (typeof payload === 'object' && payload && Array.isArray((payload as any).items))
@@ -34,17 +33,14 @@ function normalizeHooks(payload: unknown, vertical?: string): HookItem[] {
     .map((it: any, i: number): HookItem | null => {
       const id = String(it.id ?? it.key ?? i);
       const label = String(it.label ?? it.name ?? it.tag ?? 'Hook');
-      const text =
-        String(
-          it.filled_text ?? it.text ?? it.template ?? it.prompt ?? ''
-        ).trim();
-
+      const text = String(
+        it.filled_text ?? it.text ?? it.template ?? it.prompt ?? ''
+      ).trim();
       if (!text) return null;
       return { id, label, text, vertical: it.vertical ?? vertical };
     })
     .filter(Boolean) as HookItem[];
 
-  // Deduplicate by text to avoid near-dupes
   const seen = new Set<string>();
   return out.filter(h => (seen.has(h.text) ? false : (seen.add(h.text), true)));
 }
@@ -61,7 +57,6 @@ export function HooksPanel({
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  // Three optional custom inputs the page wants back
   const [customA, setCustomA] = useState('');
   const [customB, setCustomB] = useState('');
   const [customC, setCustomC] = useState('');
@@ -77,22 +72,18 @@ export function HooksPanel({
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    (async () => {
       setLoading(true);
       setErrMsg(null);
       setUseDefaults(false);
 
       try {
-        // Build URL
         const url = `${API_URL}/api/hooks?vertical=${encodeURIComponent(vertical)}`;
-
-        // Request with a 6s timeout
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 6000);
+        const timer = setTimeout(() => ctrl.abort(), 7000);
         const res = await fetch(url, { signal: ctrl.signal, credentials: 'include' });
-        clearTimeout(t);
+        clearTimeout(timer);
 
-        // Content-type must be JSON
         const ct = res.headers.get('content-type') || '';
         if (!ct.includes('application/json')) {
           throw new Error(`Expected JSON from /api/hooks, got ${ct || 'unknown content-type'}`);
@@ -102,48 +93,46 @@ export function HooksPanel({
         const normalized = normalizeHooks(json, vertical);
 
         if (!cancelled) {
-          if (res.ok && normalized.length > 0) {
+          if (res.ok && normalized.length) {
             setServerHooks(normalized);
           } else {
             setServerHooks(DEFAULT_HOOKS);
             setUseDefaults(true);
-            setErrMsg(
-              res.ok
-                ? 'No hooks returned by API – using defaults.'
-                : `Hooks API error ${res.status}`
-            );
+            setErrMsg(res.ok ? 'No hooks from API — using defaults.' : `Hooks API error ${res.status}`);
           }
         }
       } catch (e: any) {
         if (!cancelled) {
           setServerHooks(DEFAULT_HOOKS);
           setUseDefaults(true);
-          setErrMsg(e?.message || 'Failed to fetch hooks – using defaults.');
+          setErrMsg(e?.message || 'Failed to fetch hooks — using defaults.');
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
+    })();
 
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [vertical]);
 
-  const hooksToShow = useMemo<HookItem[]>(
-    () => (serverHooks && serverHooks.length > 0 ? serverHooks : DEFAULT_HOOKS),
+  const hooksToShow = useMemo(
+    () => (serverHooks?.length ? serverHooks : DEFAULT_HOOKS),
     [serverHooks]
   );
+
+  const takeHook = (text: string) => {
+    if (!customA) setCustomA(text);
+    else if (!customB) setCustomB(text);
+    else setCustomC(text);
+  };
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span className="inline-block">Trending Hooks</span>
+            <span>Trending Hooks</span>
           </h3>
-
           {useDefaults && (
             <span className="text-xs text-yellow-300">
               Using default hooks (server connection failed)
@@ -151,70 +140,53 @@ export function HooksPanel({
           )}
         </div>
 
-        {loading && (
-          <div className="text-slate-400 text-sm mb-4">Loading hooks…</div>
-        )}
+        {loading && <div className="text-slate-400 text-sm mb-3">Loading hooks…</div>}
         {!!errMsg && !loading && (
           <div className="text-xs text-yellow-300 mb-3">{errMsg}</div>
         )}
 
-        {/* Pills */}
         <div className="flex flex-wrap gap-3 mb-6">
-          {hooksToShow.map((h) => (
+          {hooksToShow.map(h => (
             <button
               key={h.id}
               type="button"
-              onClick={() => {
-                // Quick-fill the A/B/C inputs in a round-robin fashion
-                if (!customA) setCustomA(h.text);
-                else if (!customB) setCustomB(h.text);
-                else setCustomC(h.text);
-              }}
+              onClick={() => takeHook(h.text)}
               className="px-3 py-2 rounded-full bg-slate-800 text-slate-200 border border-slate-700 hover:border-blue-500 hover:text-white transition-colors text-sm"
               title={h.text}
             >
-              {h.label}: {h.text.length > 28 ? `${h.text.slice(0, 28)}…` : h.text}
+              {h.label}: {h.text.length > 36 ? `${h.text.slice(0, 36)}…` : h.text}
             </button>
           ))}
         </div>
 
-        {/* Custom A */}
-        <div className="mb-4">
-          <label className="block text-slate-300 text-sm mb-1">
-            Custom Hook for Concept A (optional)
-          </label>
-          <input
-            value={customA}
-            onChange={(e) => setCustomA(e.target.value)}
-            placeholder="Write a custom hook for Concept A"
-            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Custom B */}
-        <div className="mb-4">
-          <label className="block text-slate-300 text-sm mb-1">
-            Custom Hook for Concept B (optional)
-          </label>
-          <input
-            value={customB}
-            onChange={(e) => setCustomB(e.target.value)}
-            placeholder="Write a custom hook for Concept B"
-            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Custom C */}
-        <div>
-          <label className="block text-slate-300 text-sm mb-1">
-            Custom Hook for Concept C (optional)
-          </label>
-          <input
-            value={customC}
-            onChange={(e) => setCustomC(e.target.value)}
-            placeholder="Write a custom hook for Concept C"
-            className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="space-y-4">
+          <div>
+            <label className="block text-slate-300 text-sm mb-1">Custom Hook for Concept A (optional)</label>
+            <input
+              value={customA}
+              onChange={(e) => setCustomA(e.target.value)}
+              placeholder="Write or click a pill to auto-fill"
+              className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-slate-300 text-sm mb-1">Custom Hook for Concept B (optional)</label>
+            <input
+              value={customB}
+              onChange={(e) => setCustomB(e.target.value)}
+              placeholder="Write or click a pill to auto-fill"
+              className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-slate-300 text-sm mb-1">Custom Hook for Concept C (optional)</label>
+            <input
+              value={customC}
+              onChange={(e) => setCustomC(e.target.value)}
+              placeholder="Write or click a pill to auto-fill"
+              className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
       </div>
     </div>
