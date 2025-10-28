@@ -26,6 +26,18 @@ export function HooksPanel({
   const [B, setB] = useState('');
   const [C, setC] = useState('');
 
+  // Count words in a string
+  const countWords = (text: string) => {
+    return text.trim().split(/\s+/).filter(Boolean).length;
+  };
+
+  const getWordCountColor = (count: number) => {
+    if (count === 0) return 'text-slate-500';
+    if (count > 15) return 'text-red-400';
+    if (count > 12) return 'text-yellow-400';
+    return 'text-green-400';
+  };
+
   // lift to parent whenever values change
   useEffect(() => {
     onCustomHooksChange({ A: A || undefined, B: B || undefined, C: C || undefined });
@@ -141,8 +153,11 @@ export function HooksPanel({
 
         {/* Custom A */}
         <div>
-          <div className="text-slate-300 text-sm mb-1">
-            Custom Hook for Concept A (optional)
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-slate-300">Custom Hook for Concept A (optional)</span>
+            <span className={`text-xs ${getWordCountColor(countWords(A))}`}>
+              {countWords(A)}/15 words {countWords(A) > 15 && '⚠️'}
+            </span>
           </div>
           <input
             value={A}
@@ -154,8 +169,11 @@ export function HooksPanel({
 
         {/* Custom B */}
         <div>
-          <div className="text-slate-300 text-sm mb-1">
-            Custom Hook for Concept B (optional)
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-slate-300">Custom Hook for Concept B (optional)</span>
+            <span className={`text-xs ${getWordCountColor(countWords(B))}`}>
+              {countWords(B)}/15 words {countWords(B) > 15 && '⚠️'}
+            </span>
           </div>
           <input
             value={B}
@@ -167,8 +185,11 @@ export function HooksPanel({
 
         {/* Custom C */}
         <div>
-          <div className="text-slate-300 text-sm mb-1">
-            Custom Hook for Concept C (optional)
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className="text-slate-300">Custom Hook for Concept C (optional)</span>
+            <span className={`text-xs ${getWordCountColor(countWords(C))}`}>
+              {countWords(C)}/15 words {countWords(C) > 15 && '⚠️'}
+            </span>
           </div>
           <input
             value={C}

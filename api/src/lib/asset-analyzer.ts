@@ -322,6 +322,8 @@ export async function getProductAssets(productId: string): Promise<ProductAsset[
  */
 export async function getSelectedAssets(productId: string): Promise<ProductAsset[]> {
   try {
+    logger.info('Fetching selected assets', { productId });
+
     const { data, error } = await supabase
       .from('product_assets')
       .select('*')
@@ -331,13 +333,23 @@ export async function getSelectedAssets(productId: string): Promise<ProductAsset
 
     if (error) {
       logger.error('Failed to get selected assets', { productId, error });
-      throw error;
+      // Don't throw, return empty array to allow fallback
+      return [];
     }
 
-    return data as ProductAsset[];
+    const assets = (data || []) as ProductAsset[];
+    logger.info('Selected assets retrieved', {
+      productId,
+      count: assets.length,
+      assetIds: assets.map(a => a.id),
+      urls: assets.map(a => a.asset_url.substring(0, 80))
+    });
+
+    return assets;
   } catch (error) {
-    logger.error('Error getting selected assets', { error });
-    throw error;
+    logger.error('Error getting selected assets', { productId, error });
+    // Return empty array instead of throwing to allow fallback logic
+    return [];
   }
 }
 

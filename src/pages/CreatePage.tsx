@@ -174,11 +174,52 @@ export function CreatePage() {
     }
   };
 
-  const handleAssetSelectionComplete = () => {
-    if (selectedAssets.length >= 3) {
-      setCurrentStep('storyboard');
-    } else {
+  const handleAssetSelectionComplete = async () => {
+    if (selectedAssets.length < 3) {
       addToast('error', 'Please select at least 3 images');
+      return;
+    }
+
+    // Persist selected assets to database
+    try {
+      const pid = useStore.getState().projectId;
+      if (!pid || !productData) {
+        addToast('error', 'Project data not found');
+        return;
+      }
+
+      // Get product ID from project
+      const { data: project } = await supabase
+        .from('projects')
+        .select('product_id')
+        .eq('id', pid)
+        .maybeSingle();
+
+      if (!project?.product_id) {
+        addToast('error', 'Product not found');
+        return;
+      }
+
+      // First, unselect all assets for this product
+      await supabase
+        .from('product_assets')
+        .update({ is_selected: false, display_order: 0 })
+        .eq('product_id', project.product_id);
+
+      // Then select the chosen assets with their display order
+      for (let i = 0; i < selectedAssets.length; i++) {
+        const asset = selectedAssets[i];
+        await supabase
+          .from('product_assets')
+          .update({ is_selected: true, display_order: i })
+          .eq('id', asset.id);
+      }
+
+      addToast('success', `${selectedAssets.length} images selected`);
+      setCurrentStep('storyboard');
+    } catch (error) {
+      console.error('Error saving asset selection:', error);
+      addToast('error', 'Failed to save asset selection');
     }
   };
 
@@ -225,6 +266,60 @@ export function CreatePage() {
     if (!uid) {
       addToast('error', 'User session expired. Please sign in again.');
       setTimeout(() => navigate('/signin'), 2000);
+      return;
+    }
+
+    // Pre-flight validation: Check if we have required data
+    try {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('product_id, brand_kit_id')
+        .eq('id', pid)
+        .maybeSingle();
+
+      if (!project) {
+        addToast('error', 'Project not found. Please start over.');
+        setCurrentStep('url');
+        return;
+      }
+
+      if (!project.product_id) {
+        addToast('error', 'Product data missing. Please start over.');
+        setCurrentStep('url');
+        return;
+      }
+
+      if (!project.brand_kit_id) {
+        addToast('error', 'Brand guidelines missing. Please complete brand setup.');
+        setCurrentStep('brand-guidelines');
+        return;
+      }
+
+      // Check if we have selected assets
+      const { data: assets } = await supabase
+        .from('product_assets')
+        .select('id')
+        .eq('product_id', project.product_id)
+        .eq('is_selected', true);
+
+      const assetCount = assets?.length || 0;
+      console.log('[Create] Pre-flight check - selected assets:', assetCount);
+
+      if (assetCount < 3) {
+        addToast('error', `Please select at least 3 images (currently: ${assetCount})`);
+        if (availableAssets.length >= 3) {
+          setCurrentStep('asset-selection');
+        } else {
+          addToast('info', 'Not enough product images available. Continuing without asset selection.');
+        }
+        // Don't return - allow proceeding if no assets available
+        if (availableAssets.length >= 3) {
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('[Create] Pre-flight validation error:', error);
+      addToast('error', 'Failed to validate project data');
       return;
     }
 

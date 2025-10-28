@@ -48,16 +48,18 @@ router.post('/api/plan', async (req, res) => {
 
     const hookOverrides = [overrideHookA, overrideHookB, overrideHookC];
 
+    // Validate and truncate hook overrides if needed (allow up to 15 words)
     for (let i = 0; i < hookOverrides.length; i++) {
       const override = hookOverrides[i];
       if (override && typeof override === 'string') {
-        const wordCount = override.trim().split(/\s+/).filter(Boolean).length;
-        if (wordCount > 6) {
+        const words = override.trim().split(/\s+/).filter(Boolean);
+        if (words.length > 15) {
           return res.status(400).json({
-            error: `Hook override for concept ${String.fromCharCode(65 + i)} exceeds 6 words`,
+            error: `Hook override for concept ${String.fromCharCode(65 + i)} is too long`,
             provided: override,
-            wordCount,
-            maxWords: 6,
+            wordCount: words.length,
+            maxWords: 15,
+            suggestion: 'Keep hooks concise and attention-grabbing (15 words or less)',
           });
         }
       }
@@ -105,12 +107,42 @@ router.post('/api/plan', async (req, res) => {
     }
 
     // Get selected assets
-    const selectedAssets = await getSelectedAssets(product.id);
+    let selectedAssets = await getSelectedAssets(product.id);
+
+    // If no assets selected, try to auto-select the best ones
+    if (selectedAssets.length === 0) {
+      logger.info('No assets selected, fetching all product assets for auto-selection', { productId: product.id });
+      const allAssets = await getProductAssets(product.id);
+
+      if (allAssets.length >= 3) {
+        logger.info('Auto-selecting best assets', { available: allAssets.length });
+        // Sort by quality score and select top 4
+        const bestAssets = allAssets
+          .sort((a, b) => (b.quality_score || 0) - (a.quality_score || 0))
+          .slice(0, 4);
+
+        // Update database to mark these as selected
+        for (let i = 0; i < bestAssets.length; i++) {
+          await supabase
+            .from('product_assets')
+            .update({ is_selected: true, display_order: i })
+            .eq('id', bestAssets[i].id);
+        }
+
+        selectedAssets = bestAssets;
+        logger.info('Auto-selected assets', { count: selectedAssets.length });
+      }
+    }
 
     if (selectedAssets.length < 3) {
+      logger.error('Insufficient assets for plan generation', {
+        productId: product.id,
+        selectedCount: selectedAssets.length,
+      });
       return res.status(400).json({
         error: 'At least 3 assets must be selected before generating plans',
         currentCount: selectedAssets.length,
+        suggestion: 'Please select at least 3 product images to continue',
       });
     }
 
