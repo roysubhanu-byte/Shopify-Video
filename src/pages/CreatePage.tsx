@@ -71,19 +71,29 @@ export function CreatePage() {
     renders,
     currentRunId,
     outputType,
+    userId,
     setProjectData,
     setVariants,
     setRender,
     setCurrentRunId,
     setOutputType,
     setAdvancedMode,
+    setUserId,
     hydrateProjectId,
   } = useStore();
 
-  // Ensure projectId is rehydrated on mount (refresh/resume flows)
+  // Ensure projectId is rehydrated on mount and fetch userId from auth
   useEffect(() => {
     hydrateProjectId();
-  }, [hydrateProjectId]);
+
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      }
+    };
+    initAuth();
+  }, [hydrateProjectId, setUserId]);
 
   const handleUrlSubmit = async (url: string, vertical: string) => {
     setPendingUrl({ url, vertical });
@@ -116,8 +126,8 @@ export function CreatePage() {
         return;
       }
 
-      console.log('[Create] ingest →', url);
-      const ingestData = await ingest(url);
+      console.log('[Create] ingest →', url, 'userId:', session.user.id);
+      const ingestData = await ingest({ url, userId: session.user.id });
       console.log('[Create] ingest response:', ingestData);
 
       setProjectData(ingestData); // also sets & persists projectId via store
@@ -190,9 +200,16 @@ export function CreatePage() {
       hydrateProjectId();
     }
     const pid = useStore.getState().projectId;
+    const uid = useStore.getState().userId;
 
     if (!pid) {
       addToast('error', 'No project found. Please paste a product URL first.');
+      return;
+    }
+
+    if (!uid) {
+      addToast('error', 'User session expired. Please sign in again.');
+      setTimeout(() => navigate('/signin'), 2000);
       return;
     }
 
@@ -200,10 +217,12 @@ export function CreatePage() {
     setCurrentStep('concepts');
 
     try {
-      await plan(pid, {
-        A: customHooks.A,
-        B: customHooks.B,
-        C: customHooks.C,
+      await plan({
+        projectId: pid,
+        userId: uid,
+        overrideHookA: customHooks.A,
+        overrideHookB: customHooks.B,
+        overrideHookC: customHooks.C,
         brandTonePrompt,
         targetMarket,
         creationMode,
@@ -234,21 +253,72 @@ export function CreatePage() {
 
   const handleCreatePreviews = async () => {
     const pid = useStore.getState().projectId;
+    const uid = useStore.getState().userId;
+
     if (!pid || variants.length === 0) return;
+
+    if (!uid) {
+      addToast('error', 'User session expired. Please sign in again.');
+      setTimeout(() => navigate('/signin'), 2000);
+      return;
+    }
 
     setIsRendering(true);
 
     try {
       const response = await renderPreviews({
         projectId: pid,
-        variantIds: variants.map(v => v.id),
-        mode: 'preview',
+        userId: uid,
       });
       setCurrentRunId(response.runId);
     } catch (error) {
       console.error('Error starting previews:', error);
       addToast('error', i18n.messages.error);
       setIsRendering(false);
+    }
+  };
+
+  const handleGenerateStatic = async (variantId: string) => {
+    const uid = useStore.getState().userId;
+
+    if (!uid) {
+      addToast('error', 'User session expired. Please sign in again.');
+      setTimeout(() => navigate('/signin'), 2000);
+      return;
+    }
+
+    setGeneratingStatic(prev => new Set(prev).add(variantId));
+
+    try {
+      const response = await fetch(`${API_URL || ''}/api/render/static`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variantId, userId: uid }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate static images: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      addToast('success', 'Static images generated successfully!');
+
+      // Update the variant with the new static images if provided
+      if (result.staticImages) {
+        const updatedVariants = variants.map(v =>
+          v.id === variantId ? { ...v, staticImages: result.staticImages } : v
+        );
+        setVariants(updatedVariants);
+      }
+    } catch (error) {
+      console.error('Error generating static images:', error);
+      addToast('error', error instanceof Error ? error.message : 'Failed to generate static images');
+    } finally {
+      setGeneratingStatic(prev => {
+        const next = new Set(prev);
+        next.delete(variantId);
+        return next;
+      });
     }
   };
 
