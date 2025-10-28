@@ -1,13 +1,13 @@
 // src/store/useStore.ts
-import createDefault, * as ZustandNS from 'zustand';
+import * as Zustand from 'zustand';
 import type { IngestResponse, VariantPlan, VariantRender } from '../types/api';
 
-// Works with both export styles (named or default)
-const create: typeof createDefault =
-  // newer builds expose a named export
-  (ZustandNS as any).create || (createDefault as any);
-
-console.log('[store] zustand create typeof =', typeof create);
+// Works across ESM/CJS/various bundlers without using an illegal default import
+const create: any = (Zustand as any).create ?? (Zustand as any).default;
+if (typeof create !== 'function') {
+  // Helpful error if bundler pulled a weird variant
+  throw new Error('[store] zustand "create" was not found. Check your zustand version and imports.');
+}
 
 interface StoreState {
   credits: number;
