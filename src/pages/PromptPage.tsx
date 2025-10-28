@@ -67,8 +67,27 @@ export function PromptPage() {
   };
 
   const handleGeneratePlan = async () => {
-    if (!freeText.trim()) {
-      setErrors([{ field: 'freeText', message: 'Please enter a description for your video' }]);
+    const newErrors: ValidationError[] = [];
+
+    // Validate required fields
+    if (!freeText || !freeText.trim()) {
+      newErrors.push({ field: 'freeText', message: 'Please enter a description for your video' });
+    }
+
+    if (!aspect) {
+      newErrors.push({ field: 'aspect', message: 'Please select an aspect ratio' });
+    }
+
+    if (!duration || duration < 6 || duration > 30) {
+      newErrors.push({ field: 'duration', message: 'Duration must be between 6 and 30 seconds' });
+    }
+
+    if (!tone) {
+      newErrors.push({ field: 'tone', message: 'Please select a tone' });
+    }
+
+    if (newErrors.length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -77,20 +96,26 @@ export function PromptPage() {
 
     try {
       const response = await promptPlan({
-        freeText,
+        freeText: freeText.trim(),
         aspect,
         duration,
         tone,
       }) as PromptPlanResponse;
 
+      if (!response || !response.promptId) {
+        throw new Error('Invalid response from server');
+      }
+
       setPromptId(response.promptId);
-      setHookTemplate(response.hook);
-      setScriptBeats(response.scriptBeats);
-      setOverlays(response.overlays);
+      setHookTemplate(response.hook || '');
+      setScriptBeats(response.scriptBeats || []);
+      setOverlays(response.overlays || []);
     } catch (error) {
+      console.error('Plan generation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate plan';
       setErrors([{
         field: 'general',
-        message: error instanceof Error ? error.message : 'Failed to generate plan',
+        message: errorMessage,
       }]);
     } finally {
       setIsPlanning(false);
@@ -311,7 +336,7 @@ export function PromptPage() {
 
               <button
                 onClick={handleGeneratePlan}
-                disabled={isPlanning}
+                disabled={isPlanning || !freeText.trim()}
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2"
               >
                 {isPlanning ? (

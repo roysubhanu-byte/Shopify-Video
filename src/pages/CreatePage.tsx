@@ -188,34 +188,66 @@ export function CreatePage() {
         return;
       }
 
+      // Show loading state
+      addToast('info', 'Saving asset selection...');
+
       // Get product ID from project
-      const { data: project } = await supabase
+      const { data: project, error: projectError } = await supabase
         .from('projects')
         .select('product_id')
         .eq('id', pid)
         .maybeSingle();
 
-      if (!project?.product_id) {
+      if (projectError || !project?.product_id) {
         addToast('error', 'Product not found');
+        console.error('Project fetch error:', projectError);
         return;
       }
 
       // First, unselect all assets for this product
-      await supabase
+      const { error: unselectError } = await supabase
         .from('product_assets')
         .update({ is_selected: false, display_order: 0 })
         .eq('product_id', project.product_id);
 
-      // Then select the chosen assets with their display order
-      for (let i = 0; i < selectedAssets.length; i++) {
-        const asset = selectedAssets[i];
-        await supabase
-          .from('product_assets')
-          .update({ is_selected: true, display_order: i })
-          .eq('id', asset.id);
+      if (unselectError) {
+        console.error('Error unselecting assets:', unselectError);
+        addToast('error', 'Failed to update asset selection');
+        return;
       }
 
-      addToast('success', `${selectedAssets.length} images selected`);
+      // Then select the chosen assets with their display order - use Promise.all for atomicity
+      const updatePromises = selectedAssets.map((asset, i) =>
+        supabase
+          .from('product_assets')
+          .update({ is_selected: true, display_order: i })
+          .eq('id', asset.id)
+      );
+
+      const results = await Promise.all(updatePromises);
+      const errors = results.filter(r => r.error);
+
+      if (errors.length > 0) {
+        console.error('Errors selecting assets:', errors);
+        addToast('error', 'Some assets failed to save');
+        return;
+      }
+
+      // Verify assets were saved by re-fetching
+      const { data: verifyAssets, error: verifyError } = await supabase
+        .from('product_assets')
+        .select('id')
+        .eq('product_id', project.product_id)
+        .eq('is_selected', true);
+
+      if (verifyError || !verifyAssets || verifyAssets.length < 3) {
+        console.error('Asset verification failed:', verifyError, 'count:', verifyAssets?.length);
+        addToast('error', 'Asset selection verification failed. Please try again.');
+        return;
+      }
+
+      console.log('[CreatePage] Assets saved and verified:', verifyAssets.length);
+      addToast('success', `${selectedAssets.length} images selected and saved`);
       setCurrentStep('storyboard');
     } catch (error) {
       console.error('Error saving asset selection:', error);
@@ -295,27 +327,40 @@ export function CreatePage() {
         return;
       }
 
-      // Check if we have selected assets
-      const { data: assets } = await supabase
-        .from('product_assets')
-        .select('id')
-        .eq('product_id', project.product_id)
-        .eq('is_selected', true);
+      // Check if we have selected assets - with retry logic
+      let assetCount = 0;
+      let retries = 0;
+      const maxRetries = 3;
 
-      const assetCount = assets?.length || 0;
-      console.log('[Create] Pre-flight check - selected assets:', assetCount);
+      while (retries < maxRetries) {
+        const { data: assets, error: assetsError } = await supabase
+          .from('product_assets')
+          .select('id')
+          .eq('product_id', project.product_id)
+          .eq('is_selected', true);
 
-      if (assetCount < 3) {
+        if (assetsError) {
+          console.error('[Create] Error fetching assets:', assetsError);
+          retries++;
+          if (retries < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+        }
+
+        assetCount = assets?.length || 0;
+        break;
+      }
+
+      console.log('[Create] Pre-flight check - selected assets:', assetCount, 'after', retries, 'retries');
+
+      if (assetCount < 3 && availableAssets.length >= 3) {
         addToast('error', `Please select at least 3 images (currently: ${assetCount})`);
-        if (availableAssets.length >= 3) {
-          setCurrentStep('asset-selection');
-        } else {
-          addToast('info', 'Not enough product images available. Continuing without asset selection.');
-        }
-        // Don't return - allow proceeding if no assets available
-        if (availableAssets.length >= 3) {
-          return;
-        }
+        setCurrentStep('asset-selection');
+        return;
+      } else if (assetCount < 3 && availableAssets.length < 3) {
+        addToast('info', 'Not enough product images available. Continuing without asset selection.');
+        console.log('[Create] Proceeding without assets - only', availableAssets.length, 'available');
       }
     } catch (error) {
       console.error('[Create] Pre-flight validation error:', error);
@@ -354,8 +399,21 @@ export function CreatePage() {
       }
     } catch (error: any) {
       console.error('[Create] plan error:', error);
-      addToast('error', error?.message || i18n.messages.error);
-      setCurrentStep('hooks');
+      const errorMessage = error?.message || i18n.messages.error;
+
+      // Check if this is an asset selection error
+      if (errorMessage.includes('3 assets') || errorMessage.includes('images')) {
+        addToast('error', 'Asset selection issue detected. Redirecting to asset selection...');
+        if (availableAssets.length >= 3) {
+          setCurrentStep('asset-selection');
+        } else {
+          addToast('info', 'Not enough images available to proceed');
+          setCurrentStep(creationMode === 'automated' ? 'hooks' : 'creation-mode');
+        }
+      } else {
+        addToast('error', errorMessage);
+        setCurrentStep(creationMode === 'automated' ? 'hooks' : 'creation-mode');
+      }
     } finally {
       setIsPlanning(false);
     }

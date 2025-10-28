@@ -121,28 +121,48 @@ router.post('/api/plan', async (req, res) => {
           .sort((a, b) => (b.quality_score || 0) - (a.quality_score || 0))
           .slice(0, 4);
 
-        // Update database to mark these as selected
-        for (let i = 0; i < bestAssets.length; i++) {
-          await supabase
-            .from('product_assets')
-            .update({ is_selected: true, display_order: i })
-            .eq('id', bestAssets[i].id);
-        }
+        // Update database to mark these as selected - using Promise.all for atomicity
+        await Promise.all(
+          bestAssets.map((asset, i) =>
+            supabase
+              .from('product_assets')
+              .update({ is_selected: true, display_order: i })
+              .eq('id', asset.id)
+          )
+        );
 
-        selectedAssets = bestAssets;
-        logger.info('Auto-selected assets', { count: selectedAssets.length });
+        // Re-fetch selected assets to ensure we have the updated data
+        selectedAssets = await getSelectedAssets(product.id);
+        logger.info('Auto-selected assets and re-fetched', { count: selectedAssets.length });
       }
     }
+
+    // Log the final asset count for debugging
+    logger.info('Final asset check', {
+      productId: product.id,
+      selectedCount: selectedAssets.length,
+      assetIds: selectedAssets.map(a => a.id),
+    });
 
     if (selectedAssets.length < 3) {
       logger.error('Insufficient assets for plan generation', {
         productId: product.id,
         selectedCount: selectedAssets.length,
+        projectId,
       });
+
+      // Check if we have assets at all
+      const allAssets = await getProductAssets(product.id);
+      const totalAvailable = allAssets.length;
+
       return res.status(400).json({
         error: 'At least 3 assets must be selected before generating plans',
         currentCount: selectedAssets.length,
-        suggestion: 'Please select at least 3 product images to continue',
+        totalAvailable,
+        suggestion: totalAvailable >= 3
+          ? 'Please go back and select at least 3 product images from the asset selection step'
+          : `Only ${totalAvailable} images available. Upload more images or continue without asset selection.`,
+        needsAssetSelection: totalAvailable >= 3,
       });
     }
 
