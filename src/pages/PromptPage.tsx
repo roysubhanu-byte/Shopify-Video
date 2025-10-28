@@ -9,7 +9,6 @@ import {
   renderFinals as promptRenderFinal,
   getJobStatus as getPromptJobStatus,
 } from '../lib/api';
-
 import { i18n } from '../lib/i18n';
 import type { ScriptBeat, Overlay, PromptPlanResponse } from '../types/api';
 
@@ -79,7 +78,7 @@ export function PromptPage() {
     setErrors([]);
 
     try {
-      const response = await promptPlan({
+      const response: PromptPlanResponse = await promptPlan({
         freeText,
         aspect,
         duration,
@@ -496,7 +495,7 @@ export function PromptPage() {
                       value={logoUrl}
                       onChange={(e) => setLogoUrl(e.target.value)}
                       placeholder="https://example.com/logo.png"
-                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
                 </div>
