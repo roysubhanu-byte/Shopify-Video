@@ -68,7 +68,7 @@ router.post('/api/plan', async (req, res) => {
     // Fetch project data
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('*, products(*), brand_kits(*)')
+      .select('*')
       .eq('id', projectId)
       .eq('user_id', userId)
       .maybeSingle();
@@ -78,10 +78,27 @@ router.post('/api/plan', async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    const product = project.products;
-    const brandKit = project.brand_kits;
+    // Fetch linked product and brand kit
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', project.product_id)
+      .maybeSingle();
+
+    const { data: brandKit, error: brandKitError } = await supabase
+      .from('brand_kits')
+      .select('*')
+      .eq('id', project.brand_kit_id)
+      .maybeSingle();
 
     if (!product || !brandKit) {
+      logger.error('Project missing product or brand kit', {
+        projectId,
+        hasProduct: !!product,
+        hasBrandKit: !!brandKit,
+        productError,
+        brandKitError,
+      });
       return res.status(400).json({
         error: 'Project missing product or brand kit data',
       });

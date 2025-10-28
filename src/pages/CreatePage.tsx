@@ -273,7 +273,14 @@ export function CreatePage() {
       setCurrentRunId(response.runId);
     } catch (error) {
       console.error('Error starting previews:', error);
-      addToast('error', i18n.messages.error);
+      const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
+
+      // Check for API key errors
+      if (errorMessage.toLowerCase().includes('google') || errorMessage.toLowerCase().includes('gemini') || errorMessage.toLowerCase().includes('veo')) {
+        addToast('error', 'Video generation requires Google API keys. Please configure GOOGLE_API_KEY, GEMINI_API_KEY, or GOOGLE_VEO3_API_KEY in your API environment.');
+      } else {
+        addToast('error', errorMessage);
+      }
       setIsRendering(false);
     }
   };

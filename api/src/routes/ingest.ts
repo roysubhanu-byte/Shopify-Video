@@ -59,6 +59,7 @@ router.post('/api/ingest/url', async (req, res) => {
     const brandKit = await generateBrandKit(productData.brandName!, productData.brandColors);
     const concepts = await generate3Concepts(productData, brandKit);
 
+    // Create product record
     const { data: product, error: productError } = await supabase
       .from('products')
       .insert({
@@ -80,13 +81,47 @@ router.post('/api/ingest/url', async (req, res) => {
 
     if (productError) {
       logger.error('Failed to store product', productError);
+      return res.status(500).json({
+        error: 'Failed to store product data',
+        details: productError.message,
+      });
     }
+
+    if (!product) {
+      return res.status(500).json({
+        error: 'Product creation failed - no data returned',
+      });
+    }
+
+    // Create project record (required for variants and rendering)
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .insert({
+        user_id: userId,
+        shop_url: productData.url,
+        title: productData.title,
+        vertical: productData.vertical || 'general',
+        status: 'draft',
+        asset_selection_required: productData.images.length > 0,
+      })
+      .select()
+      .maybeSingle();
+
+    if (projectError || !project) {
+      logger.error('Failed to create project', projectError);
+      return res.status(500).json({
+        error: 'Failed to create project',
+        details: projectError?.message || 'Unknown error',
+      });
+    }
+
+    logger.info('Project created', { projectId: project.id, userId });
 
     const { data: kit, error: kitError } = await supabase
       .from('brand_kits')
       .insert({
         user_id: userId,
-        product_id: product?.id,
+        product_id: product.id,
         brand_name: brandKit.brandName,
         logo_svg: brandKit.logoSvg,
         palette: brandKit.palette,
@@ -97,6 +132,17 @@ router.post('/api/ingest/url', async (req, res) => {
 
     if (kitError) {
       logger.error('Failed to store brand kit', kitError);
+    }
+
+    // Link project to product and brand kit
+    if (kit) {
+      await supabase
+        .from('projects')
+        .update({
+          product_id: product.id,
+          brand_kit_id: kit.id,
+        })
+        .eq('id', project.id);
     }
 
     let assets: any[] = [];
@@ -114,7 +160,8 @@ router.post('/api/ingest/url', async (req, res) => {
 
     logger.info('Ingest complete', {
       userId,
-      productId: product?.id,
+      projectId: project.id,
+      productId: product.id,
       brandKitId: kit?.id,
       conceptCount: concepts.length,
       assetCount: assets.length,
@@ -122,8 +169,9 @@ router.post('/api/ingest/url', async (req, res) => {
 
     res.json({
       success: true,
-      product: {
-        id: product?.id,
+      projectId: project.id,
+      productData: {
+        id: product.id,
         url: productData.url,
         title: productData.title,
         description: productData.description,
@@ -132,6 +180,7 @@ router.post('/api/ingest/url', async (req, res) => {
         currency: productData.currency,
         images: productData.images,
         reviews: productData.reviews,
+        vertical: productData.vertical || 'general',
       },
       brandKit: {
         id: kit?.id,
