@@ -1,18 +1,16 @@
-import { useEffect, useState } from 'react';
+// src/components/HooksPanel.tsx
+import { useEffect, useMemo, useState } from 'react';
 import { API_URL } from '../lib/config';
 
-const DEFAULT_HOOKS = [
-  { id: 'pov',    label: 'POV',            filled_text: 'POV: You finally found the perfect {{product}}' },
-  { id: 'q',      label: 'Question',       filled_text: 'Question: What if {{benefit}} changed everything?' },
-  { id: 'ba',     label: 'Before/After',   filled_text: 'Before: {{problem}} → After: {{result}}' },
-  { id: 'stop',   label: 'Stop doing',     filled_text: 'Stop doing {{mundane_task}}. Do this instead.' },
-  { id: 'dyk',    label: 'Did you know',   filled_text: 'Did you know most people skip {{step}} and lose out on {{benefit}}?' },
-  { id: 'sign',   label: 'This is your sign', filled_text: 'This is your sign: try {{product}} today' },
-  { id: 'secret', label: 'The secret',     filled_text: 'The secret to better {{result}} in half the time' },
-  { id: 'if',     label: 'If you struggle', filled_text: 'If you struggle with {{pain_point}}, this changes everything' },
-];
+type HookRecord =
+  | { id?: string; label?: string; filled_text?: string } // legacy client shape
+  | { template?: string; example?: string; vertical?: string }; // current server shape
 
-type HookTemplate = { id: string; label?: string; filled_text: string; vertical?: string; };
+type UnifiedHook = {
+  id: string;
+  label: string;       // short name (e.g., "Did you know?")
+  text: string;        // full snippet to use (e.g., example)
+};
 
 export function HooksPanel({
   vertical = 'general',
@@ -21,86 +19,162 @@ export function HooksPanel({
   vertical?: string;
   onCustomHooksChange: (v: { A?: string; B?: string; C?: string }) => void;
 }) {
-  const [hooks, setHooks] = useState<HookTemplate[]>(DEFAULT_HOOKS);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [custom, setCustom] = useState<{A?: string; B?: string; C?: string}>({});
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [unified, setUnified] = useState<UnifiedHook[]>([]);
+  const [A, setA] = useState('');
+  const [B, setB] = useState('');
+  const [C, setC] = useState('');
+
+  // lift to parent whenever values change
+  useEffect(() => {
+    onCustomHooksChange({ A: A || undefined, B: B || undefined, C: C || undefined });
+  }, [A, B, C, onCustomHooksChange]);
 
   useEffect(() => {
-    let aborted = false;
-    (async () => {
+    let cancelled = false;
+    async function run() {
+      setLoading(true);
+      setServerError(null);
       try {
         const url = `${API_URL}/api/hooks?vertical=${encodeURIComponent(vertical)}`;
         const res = await fetch(url, { credentials: 'include' });
 
-        const ct = res.headers.get('content-type') || '';
-        if (!res.ok || !ct.includes('application/json')) {
-          setMsg('Using default hooks (server connection failed)');
-          return; // keep defaults
+        if (!res.ok) {
+          let msg = `Failed to fetch hooks (${res.status})`;
+          try {
+            const j = await res.json();
+            if (j?.error) msg = j.error;
+          } catch {}
+          throw new Error(msg);
         }
 
         const data = await res.json();
-        if (Array.isArray(data?.items) && data.items.length) {
-          if (!aborted) setHooks(data.items);
-        } else {
-          setMsg('Using default hooks (none from API)');
+
+        // Accept both shapes:
+        //   { items: [{ id, label, filled_text }] }
+        //   { hooks: [{ template, example, vertical }] }
+        const items: HookRecord[] = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.hooks)
+          ? data.hooks
+          : [];
+
+        const mapped: UnifiedHook[] = items.map((h: HookRecord, i: number) => {
+          // prefer new server shape when present
+          const label = (h as any).template ?? (h as any).label ?? `Hook ${i + 1}`;
+          const text =
+            (h as any).example ??
+            (h as any).filled_text ??
+            (h as any).template ??
+            `Hook ${i + 1}`;
+          return {
+            id: (h as any).id ?? `${i}`,
+            label: String(label),
+            text: String(text),
+          };
+        });
+
+        if (!cancelled) setUnified(mapped);
+      } catch (e: any) {
+        if (!cancelled) {
+          setServerError(e?.message || 'Failed to load hooks');
+          setUnified([]); // will show "Using defaults" banner if you add one later
         }
-      } catch {
-        setMsg('Using default hooks (server connection failed)');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { aborted = true; };
+    }
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [vertical]);
 
-  useEffect(() => { onCustomHooksChange(custom); }, [custom, onCustomHooksChange]);
+  const hasHooks = unified.length > 0;
+
+  // click a pill → fill A then B then C cyclically
+  const handlePick = (text: string) => {
+    if (!A) setA(text);
+    else if (!B) setB(text);
+    else if (!C) setC(text);
+    else {
+      // rotate: A<-B, B<-C, C<-text
+      setA(B);
+      setB(C);
+      setC(text);
+    }
+  };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-white font-semibold">Trending Hooks</h3>
-        {msg && <div className="text-amber-400 text-xs">{msg}</div>}
+        <div className="text-lg font-semibold text-white">Trending Hooks</div>
+        {!hasHooks && (
+          <div className="text-xs text-yellow-300">
+            Using default hooks (server connection failed or returned no items)
+          </div>
+        )}
       </div>
 
-      {/* Always render chips, even if we’re using defaults */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {hooks.map(h => (
-          <button
-            key={h.id}
-            type="button"
-            onClick={() => setCustom((prev) => ({ ...prev, A: h.filled_text }))}
-            className="px-3 py-1.5 rounded-full bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
-            title={h.filled_text}
-          >
-            {h.label || (h.filled_text.length > 40 ? h.filled_text.slice(0, 40) + '…' : h.filled_text)}
-          </button>
-        ))}
-      </div>
+      <div className="space-y-6">
+        {/* Pills */}
+        <div className="flex flex-wrap gap-2">
+          {loading && (
+            <div className="text-slate-400 text-sm">Loading hooks…</div>
+          )}
+          {serverError && (
+            <div className="text-red-300 text-sm">{serverError}</div>
+          )}
+          {hasHooks &&
+            unified.map((h) => (
+              <button
+                key={h.id}
+                onClick={() => handlePick(h.text)}
+                className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:border-blue-500 hover:text-white transition"
+                title={h.text}
+              >
+                {h.label.length > 38 ? `${h.label.slice(0, 38)}…` : h.label}
+              </button>
+            ))}
+        </div>
 
-      <div className="space-y-4">
+        {/* Custom A */}
         <div>
-          <label className="text-slate-400 text-sm">Custom Hook for Concept A (optional)</label>
+          <div className="text-slate-300 text-sm mb-1">
+            Custom Hook for Concept A (optional)
+          </div>
           <input
-            className="w-full mt-1 bg-slate-800 text-white rounded-lg px-3 py-2 border border-slate-700"
-            value={custom.A || ''}
-            onChange={(e) => setCustom({ ...custom, A: e.target.value })}
-            placeholder="Try something that actually works"
+            value={A}
+            onChange={(e) => setA(e.target.value)}
+            placeholder="Type or click a pill above to fill…"
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 text-white px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+
+        {/* Custom B */}
         <div>
-          <label className="text-slate-400 text-sm">Custom Hook for Concept B (optional)</label>
+          <div className="text-slate-300 text-sm mb-1">
+            Custom Hook for Concept B (optional)
+          </div>
           <input
-            className="w-full mt-1 bg-slate-800 text-white rounded-lg px-3 py-2 border border-slate-700"
-            value={custom.B || ''}
-            onChange={(e) => setCustom({ ...custom, B: e.target.value })}
-            placeholder="Better results in half the time"
+            value={B}
+            onChange={(e) => setB(e.target.value)}
+            placeholder="Type or click a pill above to fill…"
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 text-white px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+
+        {/* Custom C */}
         <div>
-          <label className="text-slate-400 text-sm">Custom Hook for Concept C (optional)</label>
+          <div className="text-slate-300 text-sm mb-1">
+            Custom Hook for Concept C (optional)
+          </div>
           <input
-            className="w-full mt-1 bg-slate-800 text-white rounded-lg px-3 py-2 border border-slate-700"
-            value={custom.C || ''}
-            onChange={(e) => setCustom({ ...custom, C: e.target.value })}
-            placeholder="Stop wasting money on this"
+            value={C}
+            onChange={(e) => setC(e.target.value)}
+            placeholder="Type or click a pill above to fill…"
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 text-white px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
