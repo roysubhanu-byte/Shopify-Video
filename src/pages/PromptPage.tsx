@@ -27,8 +27,6 @@ export function PromptPage() {
   const [hookTemplate, setHookTemplate] = useState('');
   const [scriptBeats, setScriptBeats] = useState<ScriptBeat[]>([]);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
-  const [voiceId, setVoiceId] = useState('default');
-  const [seed, setSeed] = useState(Math.floor(Math.random() * 10000));
   const [assetUrls, setAssetUrls] = useState<string[]>([]);
   const [logoUrl, setLogoUrl] = useState('');
   const [newAssetUrl, setNewAssetUrl] = useState('');
@@ -78,18 +76,17 @@ export function PromptPage() {
     setErrors([]);
 
     try {
-      const response: PromptPlanResponse = await promptPlan({
+      const response = await promptPlan({
         freeText,
         aspect,
         duration,
         tone,
-      });
+      }) as PromptPlanResponse;
 
       setPromptId(response.promptId);
       setHookTemplate(response.hook);
       setScriptBeats(response.scriptBeats);
       setOverlays(response.overlays);
-      setVoiceId(response.voiceId);
     } catch (error) {
       setErrors([{
         field: 'general',
@@ -107,14 +104,12 @@ export function PromptPage() {
     setErrors([]);
 
     try {
-      const idempotencyKey = `preview-${promptId}-${Date.now()}`;
       const response = await promptRenderPreview({
-        promptId,
-        mode: 'preview',
-        idempotencyKey,
-      });
+        projectId: promptId,
+        userId: 'temp-user',
+      } as any);
 
-      setCurrentRunId(response.runId);
+      setCurrentRunId((response as any).runId);
     } catch (error) {
       setErrors([{
         field: 'general',
@@ -131,14 +126,12 @@ export function PromptPage() {
     setErrors([]);
 
     try {
-      const idempotencyKey = `final-${promptId}-${Date.now()}`;
       const response = await promptRenderFinal({
-        promptId,
-        mode: 'final',
-        idempotencyKey,
-      });
+        projectId: promptId,
+        userId: 'temp-user',
+      } as any);
 
-      setCurrentRunId(response.runId);
+      setCurrentRunId((response as any).runId);
     } catch (error) {
       setErrors([{
         field: 'general',

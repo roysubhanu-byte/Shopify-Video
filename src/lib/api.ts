@@ -63,3 +63,40 @@ export async function getJobStatus(runId: string) {
 export async function fetchHooks(vertical = 'general') {
   return httpGet(`/api/hooks?vertical=${encodeURIComponent(vertical)}`);
 }
+
+/** POST /api/reference-images/upload */
+export async function uploadReferenceImage(variantId: string, beatNumber: number, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('variantId', variantId);
+  formData.append('beatNumber', beatNumber.toString());
+
+  const res = await fetch(`${base()}/api/reference-images/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return await res.json();
+}
+
+/** DELETE /api/reference-images/:variantId/:beatNumber */
+export async function deleteReferenceImage(variantId: string, beatNumber: number) {
+  const res = await fetch(`${base()}/api/reference-images/${variantId}/${beatNumber}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return await res.json();
+}
+
+/** POST /api/reshoot */
+export async function reshootBeat(payload: { variantId: string; beatNumber: number; userId: string }) {
+  return httpPost('/api/reshoot', payload);
+}

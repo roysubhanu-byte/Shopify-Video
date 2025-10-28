@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link2, Loader2, Palette } from 'lucide-react';
-import { i18n } from '../lib/i18n';
 
 interface UrlFormProps {
   onSubmit: (url: string, vertical: string) => void;

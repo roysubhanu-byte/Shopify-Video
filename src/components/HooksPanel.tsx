@@ -1,5 +1,5 @@
 // src/components/HooksPanel.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { API_URL } from '../lib/config';
 
 type HookRecord =

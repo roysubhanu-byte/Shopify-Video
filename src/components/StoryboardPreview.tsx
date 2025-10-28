@@ -56,7 +56,6 @@ const defaultBeats: Beat[] = [
 export default function StoryboardPreview({
   assets,
   hook,
-  productName,
   onReorder,
   onEditAssets,
 }: StoryboardPreviewProps) {

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, X, RotateCcw, Check, Loader2 } from 'lucide-react';
+import { Upload, RotateCcw, Check, Loader2 } from 'lucide-react';
 import { uploadReferenceImage, deleteReferenceImage } from '../lib/api';
 
 interface BeatImage {

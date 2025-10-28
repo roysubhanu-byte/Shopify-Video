@@ -19,6 +19,7 @@ interface Project {
     hook: string;
     status: string;
     video_url: string | null;
+    srt_url?: string | null;
   }>;
 }
 

@@ -1,7 +1,7 @@
 // src/components/ApiStatusBanner.tsx
 import { useEffect, useState } from 'react';
-import { waitForApi } from '@/lib/api.health';
-import { API_URL } from '@/lib/config';
+import { waitForApi } from '../lib/apiHealth';
+import { API_URL } from '../lib/config';
 
 export function ApiStatusBanner() {
   const [healthy, setHealthy] = useState<boolean | null>(null);

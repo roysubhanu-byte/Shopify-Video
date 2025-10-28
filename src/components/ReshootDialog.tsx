@@ -52,12 +52,13 @@ export function ReshootDialog({
     setError(null);
 
     try {
-      const result = await reshootBeat(beatGenerationId, {
-        reason: reason.trim(),
-        reasonCategory: reasonCategory as any,
+      const result = await reshootBeat({
+        variantId: beatGenerationId,
+        beatNumber: beatNumber,
+        userId: 'temp-user',
       });
 
-      onReshootSuccess(result.newBeatGenerationId, result.creditsRemaining);
+      onReshootSuccess((result as any).newBeatGenerationId, (result as any).creditsRemaining);
       onClose();
       setReason('');
       setReasonCategory('quality_issue');

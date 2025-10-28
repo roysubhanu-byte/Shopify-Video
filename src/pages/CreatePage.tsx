@@ -16,6 +16,7 @@ import StoryboardPreview from '../components/StoryboardPreview';
 import { useUserCredits } from '../hooks/useUserCredits';
 import { useStore } from '../store/useStore';
 import { ingest, plan, renderPreviews, getJobStatus } from '../lib/api';
+import { IngestResponse } from '../types/api';
 import { i18n } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
 import { API_URL } from '../lib/config';
@@ -71,7 +72,6 @@ export function CreatePage() {
     renders,
     currentRunId,
     outputType,
-    userId,
     setProjectData,
     setVariants,
     setRender,
@@ -127,10 +127,10 @@ export function CreatePage() {
       }
 
       console.log('[Create] ingest →', url, 'userId:', session.user.id);
-      const ingestData = await ingest({ url, userId: session.user.id });
+      const ingestData = await ingest({ url, userId: session.user.id }) as IngestResponse;
       console.log('[Create] ingest response:', ingestData);
 
-      setProjectData(ingestData); // also sets & persists projectId via store
+      setProjectData(ingestData as any); // also sets & persists projectId via store
 
       if ((ingestData as any).assets && Array.isArray((ingestData as any).assets)) {
         setAvailableAssets((ingestData as any).assets);
@@ -334,7 +334,7 @@ export function CreatePage() {
     const poll = setInterval(async () => {
       try {
         const status = await getJobStatus(currentRunId);
-        status.variants.forEach(v => setRender(v.variantId, v));
+        status.variants.forEach((variantData: any) => setRender(variantData.variantId, variantData));
         if (status.status === 'succeeded' || status.status === 'failed') {
           setIsRendering(false);
           setCurrentRunId(null);

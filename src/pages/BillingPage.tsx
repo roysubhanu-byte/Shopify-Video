@@ -76,7 +76,7 @@ export function BillingPage() {
     fetchTransactions();
   }, [user]);
 
-  const handlePurchase = async (pack: CreditPack) => {
+  const handlePurchase = async () => {
     setIsLoading(true);
     alert('Stripe integration pending. In production, this would redirect to Stripe Checkout.');
     setIsLoading(false);
@@ -142,7 +142,7 @@ export function BillingPage() {
                 </div>
 
                 <button
-                  onClick={() => handlePurchase(pack)}
+                  onClick={() => handlePurchase()}
                   disabled={isLoading}
                   className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                     pack.popular

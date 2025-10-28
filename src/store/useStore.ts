@@ -13,6 +13,7 @@ interface StoreState {
   outputType: 'video' | 'static' | null;
   advancedMode: boolean;
   userId: string | null;
+  isAuthenticated: boolean;
 
   setCredits: (credits: number) => void;
   setProductUrl: (url: string) => void;
@@ -40,6 +41,7 @@ export const useStore = create<StoreState>()(
       outputType: null,
       advancedMode: false,
       userId: null,
+      isAuthenticated: false,
 
       setCredits: (credits) => set({ credits }),
 
