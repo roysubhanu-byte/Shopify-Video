@@ -1,62 +1,74 @@
-import { API_URL } from './config';
+type JSON = Record<string, any>;
 
-function assertJSON(res: Response) {
-  const ct = res.headers.get('content-type') || '';
-  return ct.includes('application/json');
-}
+// Choose API base:
+// - Vite:   VITE_API_URL
+// - Window: __API_URL__ (optional)
+// - Fallback to same origin (works in prod if frontend is served under the same domain)
+const API_BASE =
+  (import.meta as any)?.env?.VITE_API_URL ||
+  (window as any).__API_URL__ ||
+  window.location.origin;
 
-export async function ingest(url: string) {
-  const res = await fetch(`${API_URL}/api/ingest/url`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+async function http<T = JSON>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    ...init,
   });
 
-  if (!assertJSON(res)) {
-    const text = await res.text();
-    throw new Error(`Ingest returned non-JSON (${res.status}): ${text.slice(0, 160)}`);
+  const text = await res.text();
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text };
   }
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Ingest failed (${res.status})`);
-  return data; // expected to include { projectId, ... }
+  if (!res.ok) {
+    const msg = data?.error || res.statusText || 'Request failed';
+    throw new Error(msg);
+  }
+  return data as T;
 }
 
-export async function plan(projectId: string, payload: any) {
-  const res = await fetch(`${API_URL}/api/plan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId, ...payload }),
-  });
-  if (!assertJSON(res)) throw new Error(`Plan returned non-JSON (${res.status})`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Plan failed (${res.status})`);
-  return data;
-}
+// ---- API functions used by PromptPage ----
 
-export async function renderPreviews(payload: {
-  projectId: string;
-  variantIds: string[];
-  mode: 'preview' | 'final';
+export function plan(payload: {
+  freeText: string;
+  aspect: '9:16' | '1:1' | '16:9';
+  duration: number;
+  tone: string;
 }) {
-  const res = await fetch(`${API_URL}/api/render/previews`, {
+  return http('/api/plan', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!assertJSON(res)) throw new Error(`Render returned non-JSON (${res.status})`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Render failed (${res.status})`);
-  return data as { runId: string };
 }
 
-export async function getJobStatus(runId: string) {
-  const res = await fetch(`${API_URL}/api/render/status?runId=${encodeURIComponent(runId)}`);
-  if (!assertJSON(res)) throw new Error(`Status returned non-JSON (${res.status})`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Status failed (${res.status})`);
-  return data as {
-    status: 'queued' | 'running' | 'succeeded' | 'failed';
-    variants: Array<{ variantId: string; status: string; videoUrl?: string }>;
-  };
+export function renderPreviews(payload: {
+  promptId: string;
+  mode: 'preview';
+  idempotencyKey?: string;
+}) {
+  return http('/api/render/previews', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function renderFinals(payload: {
+  promptId: string;
+  mode: 'final';
+  idempotencyKey?: string;
+}) {
+  return http('/api/render/finals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getJobStatus(runId: string) {
+  return http(`/api/render/${encodeURIComponent(runId)}/status`);
 }
