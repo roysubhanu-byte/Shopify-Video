@@ -42,12 +42,33 @@ export default function AssetSelectionModal({
   maxSelection = 5,
 }: AssetSelectionModalProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
+  const [imageLoadStates, setImageLoadStates] = useState<Map<string, 'loading' | 'loaded' | 'error'>>(new Map());
 
   useEffect(() => {
     if (isOpen) {
       setSelected(new Set(selectedAssets.map((a) => a.id)));
+      setImageLoadErrors(new Set());
+      setImageLoadStates(new Map());
     }
   }, [isOpen, selectedAssets]);
+
+  const handleImageLoad = (assetId: string) => {
+    setImageLoadStates(prev => {
+      const next = new Map(prev);
+      next.set(assetId, 'loaded');
+      return next;
+    });
+  };
+
+  const handleImageError = (assetId: string) => {
+    setImageLoadErrors(prev => new Set(prev).add(assetId));
+    setImageLoadStates(prev => {
+      const next = new Map(prev);
+      next.set(assetId, 'error');
+      return next;
+    });
+  };
 
   const toggleSelection = (assetId: string) => {
     const newSelected = new Set(selected);
@@ -139,22 +160,43 @@ export default function AssetSelectionModal({
               const isSelected = selected.has(asset.id);
               const isLowQuality = asset.qualityScore < 70;
 
+              const imageError = imageLoadErrors.has(asset.id);
+              const imageLoadState = imageLoadStates.get(asset.id) || 'loading';
+
               return (
                 <div
                   key={asset.id}
-                  onClick={() => toggleSelection(asset.id)}
-                  className={`relative cursor-pointer group rounded-lg overflow-hidden border-2 transition-all ${
+                  onClick={() => !imageError && toggleSelection(asset.id)}
+                  className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
+                    imageError
+                      ? 'cursor-not-allowed border-red-300 opacity-60'
+                      : 'cursor-pointer'
+                  } ${
                     isSelected
                       ? 'border-blue-500 ring-2 ring-blue-200'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className="aspect-[3/4] relative">
-                    <img
-                      src={asset.url}
-                      alt="Product"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="aspect-[3/4] relative bg-gray-100">
+                    {imageLoadState === 'loading' && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    )}
+                    {imageError ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                        <AlertCircle className="w-12 h-12 mb-2" />
+                        <span className="text-xs">Failed to load</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={asset.url}
+                        alt="Product"
+                        className="w-full h-full object-cover"
+                        onLoad={() => handleImageLoad(asset.id)}
+                        onError={() => handleImageError(asset.id)}
+                      />
+                    )}
 
                     {isSelected && (
                       <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">

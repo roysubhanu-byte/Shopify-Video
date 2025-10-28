@@ -13,12 +13,13 @@ router.post('/api/ingest/url', async (req, res) => {
   try {
     const { url, userId } = req.body;
 
-    // Log received request for debugging
     logger.info('Received ingest request', {
       hasUrl: !!url,
       hasUserId: !!userId,
       urlType: typeof url,
       userIdType: typeof userId,
+      userId: userId,
+      urlPreview: url?.substring(0, 50),
     });
 
     if (!url || !userId) {
@@ -26,11 +27,21 @@ router.post('/api/ingest/url', async (req, res) => {
       if (!url) missing.push('url');
       if (!userId) missing.push('userId');
 
+      logger.error('Missing required fields in ingest request', { missing, body: req.body });
+
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['url', 'userId'],
         missing,
         message: `Please provide: ${missing.join(', ')}. You may need to sign in again.`,
+      });
+    }
+
+    if (typeof userId !== 'string' || userId.length < 10) {
+      logger.error('Invalid userId format', { userId, type: typeof userId });
+      return res.status(400).json({
+        error: 'Invalid userId format',
+        message: 'Please sign in again to continue.',
       });
     }
 
@@ -93,7 +104,6 @@ router.post('/api/ingest/url', async (req, res) => {
       });
     }
 
-    // Create project record (required for variants and rendering)
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -108,14 +118,23 @@ router.post('/api/ingest/url', async (req, res) => {
       .maybeSingle();
 
     if (projectError || !project) {
-      logger.error('Failed to create project', projectError);
+      logger.error('Failed to create project', {
+        error: projectError,
+        userId,
+        productId: product.id,
+      });
       return res.status(500).json({
         error: 'Failed to create project',
         details: projectError?.message || 'Unknown error',
       });
     }
 
-    logger.info('Project created', { projectId: project.id, userId });
+    logger.info('Project created successfully', {
+      projectId: project.id,
+      userId,
+      projectUserId: project.user_id,
+      userIdMatch: project.user_id === userId,
+    });
 
     const { data: kit, error: kitError } = await supabase
       .from('brand_kits')
@@ -148,14 +167,29 @@ router.post('/api/ingest/url', async (req, res) => {
     let assets: any[] = [];
     if (product?.id && productData.images.length > 0) {
       try {
+        logger.info('Starting asset analysis', {
+          productId: product.id,
+          imageCount: productData.images.length,
+          imageUrls: productData.images,
+        });
         assets = await analyzeAndStoreAssets(product.id, productData.images);
         logger.info('Assets analyzed and stored', {
           productId: product.id,
           assetCount: assets.length,
+          assetIds: assets.map(a => a.id),
         });
       } catch (error) {
-        logger.error('Failed to analyze assets', error);
+        logger.error('Failed to analyze assets', {
+          error,
+          productId: product.id,
+          imageCount: productData.images.length,
+        });
       }
+    } else {
+      logger.info('Skipping asset analysis', {
+        hasProductId: !!product?.id,
+        imageCount: productData.images.length,
+      });
     }
 
     logger.info('Ingest complete', {

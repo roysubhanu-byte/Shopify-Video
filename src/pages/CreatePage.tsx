@@ -130,14 +130,23 @@ export function CreatePage() {
       const ingestData = await ingest({ url, userId: session.user.id }) as IngestResponse;
       console.log('[Create] ingest response:', ingestData);
 
-      setProjectData(ingestData as any); // also sets & persists projectId via store
+      setProjectData(ingestData as any);
 
-      if ((ingestData as any).assets && Array.isArray((ingestData as any).assets)) {
-        setAvailableAssets((ingestData as any).assets);
+      const assets = (ingestData as any).assets;
+      if (assets && Array.isArray(assets) && assets.length > 0) {
+        console.log('[Create] Found assets:', assets.length);
+        setAvailableAssets(assets);
+      } else {
+        console.log('[Create] No assets found in ingest response');
+        setAvailableAssets([]);
       }
 
       setCurrentStep('brand-guidelines');
-      addToast('success', 'Product loaded successfully!');
+      if (assets && assets.length > 0) {
+        addToast('success', `Product loaded with ${assets.length} images!`);
+      } else {
+        addToast('info', 'Product loaded - no images found');
+      }
     } catch (error) {
       console.error('Error ingesting URL:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
@@ -155,8 +164,14 @@ export function CreatePage() {
   const handleBrandGuidelinesComplete = (data: { brandTonePrompt: string; targetMarket: string }) => {
     setBrandTonePrompt(data.brandTonePrompt);
     setTargetMarket(data.targetMarket);
-    if (availableAssets.length > 0) setCurrentStep('asset-selection');
-    else setCurrentStep('output-type');
+    console.log('[Create] Brand guidelines complete, available assets:', availableAssets.length);
+    if (availableAssets.length > 0) {
+      setCurrentStep('asset-selection');
+    } else {
+      console.log('[Create] No assets available, skipping to output-type');
+      addToast('info', 'No product images found - proceeding without image selection');
+      setCurrentStep('output-type');
+    }
   };
 
   const handleAssetSelectionComplete = () => {
@@ -457,39 +472,77 @@ export function CreatePage() {
               <h2 className="text-3xl font-bold text-white mb-2">Select Product Images</h2>
               <p className="text-slate-400">Choose 3-5 images for your video storyboard</p>
             </div>
-            <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
-              <div className="mb-6">
-                <p className="text-white font-semibold mb-2">Available Images: {availableAssets.length}</p>
-                <p className="text-slate-400 text-sm">Selected: {selectedAssets.length}</p>
-              </div>
-              <button
-                onClick={() => setShowAssetModal(true)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-              >
-                {selectedAssets.length > 0 ? 'Change Selection' : 'Select Images'}
-              </button>
-              {selectedAssets.length > 0 && (
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {selectedAssets.map((asset, index) => (
-                    <div key={asset.id} className="relative">
-                      <img src={asset.url} alt={`Selected ${index + 1}`} className="w-full h-32 object-cover rounded-lg border-2 border-blue-500" />
-                      <div className="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        {index + 1}
-                      </div>
-                    </div>
-                  ))}
+            {availableAssets.length === 0 ? (
+              <div className="bg-slate-900 rounded-xl p-12 border border-slate-800 text-center">
+                <div className="flex flex-col items-center">
+                  <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-2">No Images Available</h3>
+                  <p className="text-slate-400 mb-6 max-w-md">
+                    We couldn't find any product images from the URL you provided. You can continue without images or go back to try a different product.
+                  </p>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setCurrentStep('url')}
+                      className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Try Different Product
+                    </button>
+                    <button
+                      onClick={() => setCurrentStep('output-type')}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Continue Without Images
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="flex justify-center">
-              <button
-                onClick={handleAssetSelectionComplete}
-                disabled={selectedAssets.length < 3}
-                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
-              >
-                Continue to Storyboard <ArrowRight size={20} />
-              </button>
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
+                  <div className="mb-6">
+                    <p className="text-white font-semibold mb-2">Available Images: {availableAssets.length}</p>
+                    <p className="text-slate-400 text-sm">Selected: {selectedAssets.length}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAssetModal(true)}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    {selectedAssets.length > 0 ? 'Change Selection' : 'Select Images'}
+                  </button>
+                  {selectedAssets.length > 0 && (
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {selectedAssets.map((asset, index) => (
+                        <div key={asset.id} className="relative">
+                          <img src={asset.url} alt={`Selected ${index + 1}`} className="w-full h-32 object-cover rounded-lg border-2 border-blue-500" />
+                          <div className="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                            {index + 1}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => setCurrentStep('output-type')}
+                    className="px-6 py-3 text-slate-400 hover:text-white transition-colors"
+                  >
+                    Skip Image Selection
+                  </button>
+                  <button
+                    onClick={handleAssetSelectionComplete}
+                    disabled={selectedAssets.length < 3}
+                    className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
+                  >
+                    Continue to Storyboard <ArrowRight size={20} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : currentStep === 'storyboard' ? (
           <div className="space-y-8">
