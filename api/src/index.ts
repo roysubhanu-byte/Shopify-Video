@@ -4,9 +4,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import { logger, requestLogger } from './lib/logger';
+import healthHandler from './routes/health';
 
+// Routers (each router already prefixes its own path, e.g. router.get('/api/products', ...))
 import ingestRouter from './routes/ingest';
-import healthRouter from './routes/health';
 import planRouter from './routes/plan';
 import renderRouter from './routes/render';
 import webhooksRouter from './routes/webhooks';
@@ -19,13 +20,14 @@ import beatsRouter from './routes/beats';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8787;
+
+const PORT = Number(process.env.PORT || 8787);
 
 /**
- * Build the allowlist:
- * - APP_ORIGINS (comma-separated) or APP_URL
- * - Any *.vercel.app (preview/prod)
- * - Local dev ports (Vite)
+ * Build CORS allowlist
+ * - APP_ORIGINS: comma separated origins
+ * - APP_URL: your deployed frontend URL
+ * - Dev ports (Vite): 5173/4173
  */
 const configured = (process.env.APP_ORIGINS || process.env.APP_URL || '')
   .split(',')
@@ -39,49 +41,25 @@ const allowedOrigins: (string | RegExp)[] = [
   'http://localhost:4173',
 ];
 
-/**
- * Health endpoint needs permissive CORS so
- * the frontend can always verify API status.
- * We attach headers first, then hand off to the router.
- */
-app.get('/healthz', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  return next();
-});
+app.use(cors({
+  origin(origin, cb) {
+    // allow same-origin / curl / SSR
+    if (!origin) return cb(null, true);
+    const ok = allowedOrigins.some(rule =>
+      rule instanceof RegExp ? rule.test(origin) : rule === origin
+    );
+    cb(ok ? null : new Error(`CORS blocked for ${origin}`), ok);
+  },
+  credentials: true,
+}));
 
-/** Global CORS for the rest of the API */
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Non-browser / server-to-server calls
-      if (!origin) return cb(null, true);
-
-      const ok = allowedOrigins.some((allowed) =>
-        typeof allowed === 'string' ? origin === allowed : allowed.test(origin)
-      );
-
-      if (ok) return cb(null, true);
-
-      logger.warn('CORS blocked origin', {
-        origin,
-        allowedOrigins: allowedOrigins.map(o => o.toString()),
-      });
-      return cb(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
-  })
-);
-
-/** Respond to all preflight requests */
-app.options('*', cors());
-
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(requestLogger);
 
-/** Routes */
-app.use(healthRouter);
+/** Health first (cheap) */
+app.get('/api/health', healthHandler);
+
+/** API routes */
 app.use(ingestRouter);
 app.use(planRouter);
 app.use(renderRouter);
@@ -92,48 +70,22 @@ app.use(staticRouter);
 app.use(frameworksRouter);
 app.use(beatsRouter);
 
-/** Error handler */
-app.use(
-  (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    logger.error('Server error', err, { endpoint: req.path, method: req.method });
-    res.status(500).json({ error: 'Internal server error' });
+/** 404 for unknown API routes */
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found', path: req.path });
   }
-);
+  next();
+});
 
-async function start() {
-  logger.info('Starting API server', {
-    port: PORT,
-    nodeEnv: process.env.NODE_ENV || 'development',
-    allowedOrigins: allowedOrigins.map(o => o.toString()),
-  });
+/** Error handler */
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('API error', { err: err?.message || err, stack: err?.stack });
+  const code = typeof err?.status === 'number' ? err.status : 500;
+  res.status(code).json({ error: err?.message || 'Server error' });
+});
 
-  app.listen(PORT, () => {
-    logger.info('API server started', {
-      port: PORT,
-      endpoints: [
-        'GET  /healthz                  - Health check',
-        'POST /api/ingest/url           - Paste URL → get 3 concepts',
-        'GET  /api/ingest/products      - List user products',
-        'GET  /api/products             - Get products from Shopify or generic site',
-        'GET  /api/hooks                - Get trending hook templates',
-        'POST /api/plan                 - Generate validated plans (with hook overrides)',
-        'POST /api/render/previews      - Queue preview renders',
-        'POST /api/render/finals        - Queue final renders',
-        'POST /api/render/swap-hook     - Generate preview with new hook',
-        'POST /api/render/static        - Generate static PNG images',
-        'GET  /static/*                 - Serve static files',
-        'POST /webhooks/veo             - VEO3 callback handler',
-      ],
-    });
-
-    // Friendly console output for local dev
-    console.log(`\n🚀 API ready on http://localhost:${PORT}`);
-    console.log(`\n🔒 CORS allows:`);
-    allowedOrigins.forEach(o => console.log(`   • ${o.toString()}`));
-  });
-}
-
-start().catch((error) => {
-  logger.error('Failed to start server', error);
-  process.exit(1);
+/** Start server ONLY after routes are mounted */
+app.listen(PORT, () => {
+  console.log(`[api] listening on ${PORT}`);
 });
