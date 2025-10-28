@@ -6,7 +6,9 @@ import { LandingPage } from './pages/LandingPage';
 import { SignInPage } from './pages/SignInPage';
 import { SignUpPage } from './pages/SignUpPage';
 // ⬇️ Import the *default* export (no braces)
-import CreatePage from './pages/CreatePage';
+// ✅ correct (named export)
+import { CreatePage } from './pages/CreatePage';
+
 import { PromptPage } from './pages/PromptPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { BillingPage } from './pages/BillingPage';
