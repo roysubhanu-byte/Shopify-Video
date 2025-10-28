@@ -1,4 +1,5 @@
 import { Logger } from './logger';
+import { getGoogleApiKey } from './google';
 
 const logger = new Logger({ module: 'veo3-client' });
 
@@ -226,10 +227,10 @@ export class VEO3Client {
  * Create a VEO3 client instance
  */
 export function createVEO3Client(model: 'veo_fast' | 'veo_3' = 'veo_fast'): VEO3Client {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  const apiKey = getGoogleApiKey();
 
   if (!apiKey) {
-    throw new Error('GOOGLE_AI_API_KEY environment variable is required');
+    throw new Error('Google API key is required. Set GOOGLE_VEO3_API_KEY, GOOGLE_API_KEY, or GEMINI_API_KEY environment variable.');
   }
 
   return new VEO3Client({
