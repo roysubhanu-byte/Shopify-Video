@@ -2,10 +2,12 @@
 import createDefault, * as ZustandNS from 'zustand';
 import type { IngestResponse, VariantPlan, VariantRender } from '../types/api';
 
-// Make it work regardless of zustand export style
+// Works with both export styles (named or default)
 const create: typeof createDefault =
-  // named export exists in newer builds
+  // newer builds expose a named export
   (ZustandNS as any).create || (createDefault as any);
+
+console.log('[store] zustand create typeof =', typeof create);
 
 interface StoreState {
   credits: number;
@@ -42,20 +44,14 @@ export const useStore = create<StoreState>((set) => ({
 
   setCredits: (credits) => set({ credits }),
   setProductUrl: (url) => set({ productUrl: url }),
-
-  setProjectData: (data) =>
-    set({
-      projectId: data.projectId,
-      productData: data.productData,
-    }),
-
+  setProjectData: (data) => set({ projectId: data.projectId, productData: data.productData }),
   setVariants: (variants) => set({ variants }),
 
   setRender: (variantId, render) =>
     set((state) => {
-      const newRenders = new Map(state.renders);
-      newRenders.set(variantId, render);
-      return { renders: newRenders };
+      const next = new Map(state.renders);
+      next.set(variantId, render);
+      return { renders: next };
     }),
 
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
