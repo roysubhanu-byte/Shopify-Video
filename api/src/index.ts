@@ -4,9 +4,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import { logger, requestLogger } from './lib/logger';
-import healthHandler from './routes/health';
+import { healthHandler } from './routes/health';
 
-// Routers (each router already prefixes its own path, e.g. router.get('/api/products', ...))
+// Routers (these should export a default Express.Router)
 import ingestRouter from './routes/ingest';
 import planRouter from './routes/plan';
 import renderRouter from './routes/render';
@@ -20,14 +20,10 @@ import beatsRouter from './routes/beats';
 dotenv.config();
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 8787);
 
 /**
- * Build CORS allowlist
- * - APP_ORIGINS: comma separated origins
- * - APP_URL: your deployed frontend URL
- * - Dev ports (Vite): 5173/4173
+ * CORS allowlist
  */
 const configured = (process.env.APP_ORIGINS || process.env.APP_URL || '')
   .split(',')
@@ -43,8 +39,7 @@ const allowedOrigins: (string | RegExp)[] = [
 
 app.use(cors({
   origin(origin, cb) {
-    // allow same-origin / curl / SSR
-    if (!origin) return cb(null, true);
+    if (!origin) return cb(null, true); // SSR/curl
     const ok = allowedOrigins.some(rule =>
       rule instanceof RegExp ? rule.test(origin) : rule === origin
     );
@@ -56,10 +51,10 @@ app.use(cors({
 app.use(express.json({ limit: '5mb' }));
 app.use(requestLogger);
 
-/** Health first (cheap) */
+/** Health */
 app.get('/api/health', healthHandler);
 
-/** API routes */
+/** API routers */
 app.use(ingestRouter);
 app.use(planRouter);
 app.use(renderRouter);
@@ -80,12 +75,12 @@ app.use((req, res, next) => {
 
 /** Error handler */
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('API error', { err: err?.message || err, stack: err?.stack });
-  const code = typeof err?.status === 'number' ? err.status : 500;
-  res.status(code).json({ error: err?.message || 'Server error' });
+  logger?.error?.('API error', { err: err?.message || err, stack: err?.stack });
+  res.status(typeof err?.status === 'number' ? err.status : 500).json({
+    error: err?.message || 'Server error',
+  });
 });
 
-/** Start server ONLY after routes are mounted */
 app.listen(PORT, () => {
   console.log(`[api] listening on ${PORT}`);
 });
