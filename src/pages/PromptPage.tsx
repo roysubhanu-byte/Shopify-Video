@@ -3,7 +3,13 @@ import { Sparkles, Play, Wand2, Upload, X, Plus, Loader2 } from 'lucide-react';
 import { TopNav } from '../components/TopNav';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { useUserCredits } from '../hooks/useUserCredits';
-import { promptPlan, promptRenderPreview, promptRenderFinal, getPromptJobStatus } from '../lib/api';
+import {
+  plan as promptPlan,
+  renderPreviews as promptRenderPreview,
+  renderFinals as promptRenderFinal,
+  getJobStatus as getPromptJobStatus,
+} from '../lib/api';
+
 import { i18n } from '../lib/i18n';
 import type { ScriptBeat, Overlay, PromptPlanResponse } from '../types/api';
 
