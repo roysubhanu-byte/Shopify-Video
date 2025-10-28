@@ -5,6 +5,7 @@ import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from
 import { Plan } from '../types/plan';
 import { createVEO3Client } from '../lib/veo3-client';
 import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
+import { hasGoogle } from '../lib/google'; // ⬅️ NEW
 
 const router = Router();
 const logger = new Logger({ module: 'render-route' });
@@ -21,6 +22,14 @@ router.post('/api/render/previews', async (req, res) => {
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['projectId', 'userId'],
+      });
+    }
+
+    // ⬅️ Block only the Google/VEO path if key is missing
+    if (!hasGoogle()) {
+      return res.status(400).json({
+        error:
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable video previews.',
       });
     }
 
@@ -103,10 +112,7 @@ router.post('/api/render/previews', async (req, res) => {
       // Call VEO3 Fast API
       try {
         // Update run to running state
-        await supabase
-          .from('runs')
-          .update({ state: 'running' })
-          .eq('id', run.id);
+        await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
         const veoResult = await veo3Client.generateVideo({
           prompt: `${system}\n\n${user}`,
@@ -133,16 +139,9 @@ router.post('/api/render/previews', async (req, res) => {
         runs.push(run);
 
         // Update variant status
-        await supabase
-          .from('variants')
-          .update({ status: 'previewing' })
-          .eq('id', variant.id);
-
+        await supabase.from('variants').update({ status: 'previewing' }).eq('id', variant.id);
       } catch (veoError) {
-        logger.error('VEO3 API call failed', {
-          runId: run.id,
-          error: veoError,
-        });
+        logger.error('VEO3 API call failed', { runId: run.id, error: veoError });
 
         await supabase
           .from('runs')
@@ -152,17 +151,11 @@ router.post('/api/render/previews', async (req, res) => {
           })
           .eq('id', run.id);
 
-        await supabase
-          .from('variants')
-          .update({ status: 'error' })
-          .eq('id', variant.id);
+        await supabase.from('variants').update({ status: 'error' }).eq('id', variant.id);
       }
     }
 
-    logger.info('Preview renders initiated', {
-      projectId,
-      runCount: runs.length,
-    });
+    logger.info('Preview renders initiated', { projectId, runCount: runs.length });
 
     res.json({
       success: true,
@@ -189,7 +182,7 @@ router.post('/api/render/previews', async (req, res) => {
  */
 router.post('/api/render/finals', async (req, res) => {
   try {
-    const { projectId, userId, audioUrl } = req.body;
+    const { projectId, userId } = req.body;
 
     if (!projectId || !userId) {
       return res.status(400).json({
@@ -198,7 +191,15 @@ router.post('/api/render/finals', async (req, res) => {
       });
     }
 
-    logger.info('Starting final renders', { projectId, userId, audioUrl });
+    // ⬅️ Final rendering is Google-only in this code; guard it.
+    if (!hasGoogle()) {
+      return res.status(400).json({
+        error:
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable final video rendering.',
+      });
+    }
+
+    logger.info('Starting final renders', { projectId, userId });
 
     // Get all variants with plans
     const { data: variants, error: variantsError } = await supabase
@@ -337,10 +338,7 @@ router.post('/api/render/finals', async (req, res) => {
       // Step 3: Call VEO3 (full model) with audio and beat windows
       try {
         // Update run to running state
-        await supabase
-          .from('runs')
-          .update({ state: 'running' })
-          .eq('id', run.id);
+        await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
         const veoResult = await veo3Client.generateVideo({
           prompt: `${system}\n\n${user}`,
@@ -375,16 +373,9 @@ router.post('/api/render/finals', async (req, res) => {
         runs.push(run);
 
         // Update variant status
-        await supabase
-          .from('variants')
-          .update({ status: 'finalizing' })
-          .eq('id', variant.id);
-
+        await supabase.from('variants').update({ status: 'finalizing' }).eq('id', variant.id);
       } catch (veoError) {
-        logger.error('VEO3 API call failed for final', {
-          runId: run.id,
-          error: veoError,
-        });
+        logger.error('VEO3 API call failed for final', { runId: run.id, error: veoError });
 
         await supabase
           .from('runs')
@@ -394,18 +385,12 @@ router.post('/api/render/finals', async (req, res) => {
           })
           .eq('id', run.id);
 
-        await supabase
-          .from('variants')
-          .update({ status: 'error' })
-          .eq('id', variant.id);
+        await supabase.from('variants').update({ status: 'error' }).eq('id', variant.id);
       }
     }
 
     // Deduct credits
-    await supabase
-      .from('users')
-      .update({ credits: user.credits - requiredCredits })
-      .eq('id', userId);
+    await supabase.from('users').update({ credits: user.credits - requiredCredits }).eq('id', userId);
 
     logger.info('Final renders initiated', {
       projectId,
@@ -446,6 +431,14 @@ router.post('/api/render/swap-hook', async (req, res) => {
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['variantId', 'newHookLine'],
+      });
+    }
+
+    // ⬅️ This endpoint calls VEO3 too; guard it.
+    if (!hasGoogle()) {
+      return res.status(400).json({
+        error:
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable hook swap previews.',
       });
     }
 
@@ -492,10 +485,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
     });
 
     // Save updated plan
-    await supabase
-      .from('variants')
-      .update({ script_json: plan })
-      .eq('id', variantId);
+    await supabase.from('variants').update({ script_json: plan }).eq('id', variantId);
 
     // Compile preview prompt with new plan
     const { system, user, control } = compilePreviewPrompt(plan);
@@ -535,10 +525,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
       }
 
       // Deduct 1 preview credit
-      await supabase
-        .from('users')
-        .update({ credits: user.credits - 1 })
-        .eq('id', userId);
+      await supabase.from('users').update({ credits: user.credits - 1 }).eq('id', userId);
 
       logger.info('Preview credit deducted', { userId, remaining: user.credits - 1 });
     }
@@ -588,10 +575,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
 
     try {
       // Update run to running state
-      await supabase
-        .from('runs')
-        .update({ state: 'running' })
-        .eq('id', run.id);
+      await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
       const veoResult = await veo3Client.generateVideo({
         prompt: `${system}\n\n${user}`,
@@ -616,10 +600,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
         .eq('id', run.id);
 
       // Update variant status
-      await supabase
-        .from('variants')
-        .update({ status: 'previewing' })
-        .eq('id', variant.id);
+      await supabase.from('variants').update({ status: 'previewing' }).eq('id', variant.id);
 
       res.json({
         success: true,
@@ -629,12 +610,8 @@ router.post('/api/render/swap-hook', async (req, res) => {
         message: 'Hook swap preview initiated with VEO3 Fast',
         creditsCharged: userId ? 1 : 0,
       });
-
     } catch (veoError) {
-      logger.error('VEO3 API call failed for hook swap', {
-        runId: run.id,
-        error: veoError,
-      });
+      logger.error('VEO3 API call failed for hook swap', { runId: run.id, error: veoError });
 
       await supabase
         .from('runs')
@@ -644,17 +621,13 @@ router.post('/api/render/swap-hook', async (req, res) => {
         })
         .eq('id', run.id);
 
-      await supabase
-        .from('variants')
-        .update({ status: 'error' })
-        .eq('id', variant.id);
+      await supabase.from('variants').update({ status: 'error' }).eq('id', variant.id);
 
       return res.status(500).json({
         error: 'VEO3 API call failed',
         details: veoError instanceof Error ? veoError.message : 'Unknown error',
       });
     }
-
   } catch (error) {
     logger.error('Hook swap error', { error });
     res.status(500).json({
