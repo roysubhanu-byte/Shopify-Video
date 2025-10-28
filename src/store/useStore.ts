@@ -1,34 +1,11 @@
 // src/store/useStore.ts
-import { create } from 'zustand';
+import createDefault, * as ZustandNS from 'zustand';
 import type { IngestResponse, VariantPlan, VariantRender } from '../types/api';
 
-// LocalStorage keys
-const LS = {
-  projectId: 'sv_projectId',
-  productData: 'sv_productData',
-  productUrl: 'sv_productUrl',
-  outputType: 'sv_outputType',
-};
-
-function safeGet<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-function safeSet(key: string, value: any) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
-function safeRemove(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {}
-}
+// Make it work regardless of zustand export style
+const create: typeof createDefault =
+  // named export exists in newer builds
+  (ZustandNS as any).create || (createDefault as any);
 
 interface StoreState {
   credits: number;
@@ -53,33 +30,24 @@ interface StoreState {
 }
 
 export const useStore = create<StoreState>((set) => ({
-  // hydrate from localStorage
   credits: 50,
-  productUrl: safeGet<string>(LS.productUrl, ''),
-  projectId: safeGet<string | null>(LS.projectId, null),
-  productData: safeGet<any>(LS.productData, null),
+  productUrl: '',
+  projectId: null,
+  productData: null,
   variants: [],
   renders: new Map(),
   currentRunId: null,
-  outputType: safeGet<'video' | 'static' | null>(LS.outputType, null),
+  outputType: null,
   advancedMode: false,
 
   setCredits: (credits) => set({ credits }),
+  setProductUrl: (url) => set({ productUrl: url }),
 
-  setProductUrl: (url) => {
-    safeSet(LS.productUrl, url);
-    set({ productUrl: url });
-  },
-
-  // When ingest succeeds, persist projectId + productData
-  setProjectData: (data) => {
-    safeSet(LS.projectId, data.projectId);
-    safeSet(LS.productData, data.productData);
+  setProjectData: (data) =>
     set({
       projectId: data.projectId,
       productData: data.productData,
-    });
-  },
+    }),
 
   setVariants: (variants) => set({ variants }),
 
@@ -91,19 +59,10 @@ export const useStore = create<StoreState>((set) => ({
     }),
 
   setCurrentRunId: (runId) => set({ currentRunId: runId }),
-
-  setOutputType: (outputType) => {
-    safeSet(LS.outputType, outputType);
-    set({ outputType });
-  },
-
+  setOutputType: (outputType) => set({ outputType }),
   setAdvancedMode: (advancedMode) => set({ advancedMode }),
 
-  // Clear both state and localStorage
-  resetProject: () => {
-    safeRemove(LS.projectId);
-    safeRemove(LS.productData);
-    safeRemove(LS.productUrl);
+  resetProject: () =>
     set({
       productUrl: '',
       projectId: null,
@@ -113,6 +72,5 @@ export const useStore = create<StoreState>((set) => ({
       currentRunId: null,
       outputType: null,
       advancedMode: false,
-    });
-  },
+    }),
 }));
