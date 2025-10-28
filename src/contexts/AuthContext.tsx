@@ -50,21 +50,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (!existingUser) {
-        await supabase
-          .from('users')
-          .insert([{
-            id: authUser.id,
-            email: authUser.email,
-            credits: 50,
-          }]);
+        console.warn('User record not found for authenticated user. The trigger should have created it.');
       }
     } catch (error) {
-      console.error('Error ensuring user record:', error);
+      console.error('Error checking user record:', error);
     }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
     });
@@ -74,26 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('This email is already registered. Please sign in instead.');
       }
       throw new Error(error.message || 'Failed to create account');
-    }
-
-    if (data.user) {
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email,
-            credits: 50,
-          },
-        ]);
-
-      if (insertError) {
-        if (insertError.code === '23505') {
-          return;
-        }
-        console.error('Failed to create user record:', insertError);
-        throw new Error('Account created but failed to initialize user profile. Please contact support.');
-      }
     }
   };
 
