@@ -50,6 +50,14 @@ app.use(cors({
 
 app.use(express.json({ limit: '5mb' }));
 app.use(requestLogger);
+// after app is created
+import { healthHandler } from './routes/health';
+
+// existing:
+app.get('/api/health', healthHandler);
+
+// alias so old frontends that call /healthz succeed
+app.get('/healthz', healthHandler);
 
 /** Health */
 app.get('/api/health', healthHandler);
