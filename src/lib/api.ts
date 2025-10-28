@@ -1,9 +1,6 @@
+// src/lib/api.ts
 type JSON = Record<string, any>;
 
-// Choose API base:
-// - Vite:   VITE_API_URL
-// - Window: __API_URL__ (optional)
-// - Fallback to same origin (works in prod if frontend is served under the same domain)
 const API_BASE =
   (import.meta as any)?.env?.VITE_API_URL ||
   (window as any).__API_URL__ ||
@@ -33,8 +30,7 @@ async function http<T = JSON>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-// ---- API functions used by PromptPage ----
-
+/* Canonical (new) names */
 export function plan(payload: {
   freeText: string;
   aspect: '9:16' | '1:1' | '16:9';
@@ -72,3 +68,9 @@ export function renderFinals(payload: {
 export function getJobStatus(runId: string) {
   return http(`/api/render/${encodeURIComponent(runId)}/status`);
 }
+
+/* Compatibility exports (old names) — keep both so either import style works */
+export const promptPlan = plan;
+export const promptRenderPreview = renderPreviews;
+export const promptRenderFinal = renderFinals;
+export const getPromptJobStatus = getJobStatus;
