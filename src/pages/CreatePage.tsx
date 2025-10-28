@@ -1,7 +1,7 @@
 // src/pages/CreatePage.tsx
 import { useState, useEffect } from 'react';
 import { ArrowRight, ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TopNav } from '../components/TopNav';
 import { UrlForm } from '../components/UrlForm';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -43,6 +43,7 @@ type FlowStep =
 export function CreatePage() {
   const credits = useUserCredits();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [currentStep, setCurrentStep] = useState<FlowStep>('url');
   const [isIngesting, setIsIngesting] = useState(false);
@@ -58,7 +59,9 @@ export function CreatePage() {
   const [framework, setFramework] = useState<string | undefined>();
   const [customHooks, setCustomHooks] = useState<{ A?: string; B?: string; C?: string }>({});
   const [generatingStatic, setGeneratingStatic] = useState<Set<string>>(new Set());
-  const [toasts, setToasts] = useState<Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>>([]);
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; type: 'success' | 'error' | 'info'; message: string }>
+  >([]);
   const [showCreditDialog, setShowCreditDialog] = useState(false);
   const [creditError, setCreditError] = useState<{ needed: number; current: number } | null>(null);
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
@@ -80,6 +83,23 @@ export function CreatePage() {
     setAdvancedMode,
   } = useStore();
 
+  // Restore projectId on mount (from ?projectId= or localStorage)
+  useEffect(() => {
+    if (!projectId) {
+      const fromQuery = searchParams.get('projectId');
+      const fromStorage = localStorage.getItem('projectId');
+      const restored = fromQuery || fromStorage;
+      if (restored) {
+        try {
+          // Zustand stores expose setState – if your store uses another setter, replace this line accordingly.
+          (useStore as any).setState?.({ projectId: restored });
+        } catch {
+          /* noop */
+        }
+      }
+    }
+  }, [projectId, searchParams]);
+
   const handleUrlSubmit = async (url: string, vertical: string) => {
     setPendingUrl({ url, vertical });
     setShowProductPicker(true);
@@ -93,7 +113,9 @@ export function CreatePage() {
   const processIngest = async (url: string, _vertical: string, _selectedProduct: any) => {
     setIsIngesting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         addToast('error', 'Your session has expired. Please sign in again.');
         setTimeout(() => navigate('/signin'), 2000);
@@ -106,7 +128,29 @@ export function CreatePage() {
 
       console.log('[Create] ingest →', url);
       const ingestData = await ingest(url);
+
+      // Save all data to store as before
       setProjectData(ingestData);
+
+      // Extract and persist projectId so refreshes work
+      const newProjectId =
+        (ingestData as any)?.projectId ||
+        (ingestData as any)?.project_id ||
+        (ingestData as any)?.project?.id;
+
+      if (newProjectId) {
+        localStorage.setItem('projectId', newProjectId);
+        // keep it in the URL too (nice for reloads and shareability)
+        searchParams.set('projectId', newProjectId);
+        setSearchParams(searchParams, { replace: true });
+
+        // If your store doesn’t set projectId inside setProjectData, force set here:
+        try {
+          (useStore as any).setState?.({ projectId: newProjectId });
+        } catch {
+          /* noop */
+        }
+      }
 
       if ((ingestData as any).assets && Array.isArray((ingestData as any).assets)) {
         setAvailableAssets((ingestData as any).assets);
@@ -117,7 +161,10 @@ export function CreatePage() {
     } catch (error) {
       console.error('Error ingesting URL:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
-      if (errorMessage.toLowerCase().includes('sign in') || errorMessage.toLowerCase().includes('session')) {
+      if (
+        errorMessage.toLowerCase().includes('sign in') ||
+        errorMessage.toLowerCase().includes('session')
+      ) {
         addToast('error', errorMessage);
         setTimeout(() => navigate('/signin'), 3000);
       } else {
@@ -128,7 +175,10 @@ export function CreatePage() {
     }
   };
 
-  const handleBrandGuidelinesComplete = (data: { brandTonePrompt: string; targetMarket: string }) => {
+  const handleBrandGuidelinesComplete = (data: {
+    brandTonePrompt: string;
+    targetMarket: string;
+  }) => {
     setBrandTonePrompt(data.brandTonePrompt);
     setTargetMarket(data.targetMarket);
     if (availableAssets.length > 0) setCurrentStep('asset-selection');
@@ -145,7 +195,10 @@ export function CreatePage() {
 
   const handleStoryboardComplete = () => setCurrentStep('output-type');
 
-  const handleOutputTypeComplete = (data: { outputType: 'video' | 'static'; advancedMode?: boolean }) => {
+  const handleOutputTypeComplete = (data: {
+    outputType: 'video' | 'static';
+    advancedMode?: boolean;
+  }) => {
     if (data.advancedMode) {
       setAdvancedMode(true);
       navigate('/prompt');
@@ -192,10 +245,7 @@ export function CreatePage() {
         framework: creationMode === 'manual' ? framework : undefined,
       });
 
-      const variantsResponse = await supabase
-        .from('variants')
-        .select('*')
-        .eq('project_id', projectId);
+      const variantsResponse = await supabase.from('variants').select('*').eq('project_id', projectId);
 
       if (variantsResponse.error) {
         console.warn('[Create] variants fetch error:', variantsResponse.error);
@@ -207,8 +257,7 @@ export function CreatePage() {
     } catch (error: any) {
       console.error('[Create] plan error:', error);
       addToast('error', error?.message || i18n.messages.error);
-      // bounce back to hooks so user can try again
-      setCurrentStep('hooks');
+      setCurrentStep('hooks'); // let user retry
     } finally {
       setIsPlanning(false);
     }
@@ -221,7 +270,7 @@ export function CreatePage() {
     try {
       const response = await renderPreviews({
         projectId,
-        variantIds: variants.map(v => v.id),
+        variantIds: variants.map((v) => v.id),
         mode: 'preview',
       });
       setCurrentRunId(response.runId);
@@ -237,7 +286,7 @@ export function CreatePage() {
     const poll = setInterval(async () => {
       try {
         const status = await getJobStatus(currentRunId);
-        status.variants.forEach(v => setRender(v.variantId, v));
+        status.variants.forEach((v) => setRender(v.variantId, v));
         if (status.status === 'succeeded' || status.status === 'failed') {
           setIsRendering(false);
           setCurrentRunId(null);
@@ -252,17 +301,19 @@ export function CreatePage() {
 
   const addToast = (type: 'success' | 'error' | 'info', message: string) => {
     const id = `toast_${Date.now()}`;
-    setToasts(prev => [...prev, { id, type, message }]);
+    setToasts((prev) => [...prev, { id, type, message }]);
     if (type !== 'error') setTimeout(() => removeToast(id), 5000);
   };
-  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
+  const removeToast = (id: string) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   const handleGenerateStatic = async (variantId: string, conceptTag: string) => {
-    setGeneratingStatic(prev => new Set(prev).add(variantId));
+    setGeneratingStatic((prev) => new Set(prev).add(variantId));
     addToast('info', `Generating images for Concept ${conceptTag}…`);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       const response = await fetch(`${API_URL}/api/render/static`, {
         method: 'POST',
@@ -282,7 +333,9 @@ export function CreatePage() {
       if (!response.ok) throw new Error(data.error || 'Failed to generate images');
 
       if (data.success && data.imageUrls) {
-        const updated = variants.map(v => (v.id === variantId ? { ...v, staticImages: data.imageUrls } : v));
+        const updated = variants.map((v) =>
+          v.id === variantId ? { ...v, staticImages: data.imageUrls } : v
+        );
         setVariants(updated);
         addToast('success', `Ready – ${data.count} images created for Concept ${conceptTag}`);
       }
@@ -290,7 +343,7 @@ export function CreatePage() {
       console.error('Static images error:', error);
       addToast('error', error?.message || 'Failed to generate static images');
     } finally {
-      setGeneratingStatic(prev => {
+      setGeneratingStatic((prev) => {
         const s = new Set(prev);
         s.delete(variantId);
         return s;
@@ -298,12 +351,12 @@ export function CreatePage() {
     }
   };
 
-  const hasValidRenders = variants.some(v => {
+  const hasValidRenders = variants.some((v) => {
     const r = renders.get(v.id);
     return r?.status === 'succeeded' && r?.videoUrl;
-    });
+  });
 
-  const conceptsData = variants.map(v => {
+  const conceptsData = variants.map((v) => {
     const r = renders.get(v.id);
     return {
       id: v.id,
@@ -319,37 +372,49 @@ export function CreatePage() {
     const steps = [
       { id: 'url', label: 'Product' },
       { id: 'brand-guidelines', label: 'Brand' },
-      ...(availableAssets.length > 0 ? [
-        { id: 'asset-selection', label: 'Images' },
-        { id: 'storyboard', label: 'Storyboard' },
-      ] : []),
+      ...(availableAssets.length > 0
+        ? [
+            { id: 'asset-selection', label: 'Images' },
+            { id: 'storyboard', label: 'Storyboard' },
+          ]
+        : []),
       { id: 'output-type', label: 'Output' },
       { id: 'creation-mode', label: 'Mode' },
       ...(creationMode === 'automated' ? [{ id: 'hooks', label: 'Hooks' }] : []),
       { id: 'concepts', label: 'Create' },
     ];
-    const currentIndex = steps.findIndex(s => s.id === currentStep);
+    const currentIndex = steps.findIndex((s) => s.id === currentStep);
 
     return (
       <div className="flex items-center justify-center gap-4 mb-12">
         {steps.map((step, index) => (
           <div key={step.id} className="flex items-center">
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
-                index < currentIndex
-                  ? 'bg-green-500 text-white'
-                  : index === currentIndex
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-700 text-slate-400'
-              }`}>
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                  index < currentIndex
+                    ? 'bg-green-500 text-white'
+                    : index === currentIndex
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-slate-700 text-slate-400'
+                }`}
+              >
                 {index < currentIndex ? '✓' : index + 1}
               </div>
-              <span className={`text-sm font-medium ${index <= currentIndex ? 'text-white' : 'text-slate-500'}`}>
+              <span
+                className={`text-sm font-medium ${
+                  index <= currentIndex ? 'text-white' : 'text-slate-500'
+                }`}
+              >
                 {step.label}
               </span>
             </div>
             {index < steps.length - 1 && (
-              <div className={`w-12 h-0.5 mx-2 ${index < currentIndex ? 'bg-green-500' : 'bg-slate-700'}`} />
+              <div
+                className={`w-12 h-0.5 mx-2 ${
+                  index < currentIndex ? 'bg-green-500' : 'bg-slate-700'
+                }`}
+              />
             )}
           </div>
         ))}
@@ -373,8 +438,10 @@ export function CreatePage() {
                   else setCurrentStep('brand-guidelines');
                 } else if (currentStep === 'creation-mode') setCurrentStep('output-type');
                 else if (currentStep === 'hooks') setCurrentStep('creation-mode');
-                else if (currentStep === 'concepts' && creationMode === 'automated') setCurrentStep('hooks');
-                else if (currentStep === 'concepts' && creationMode === 'manual') setCurrentStep('creation-mode');
+                else if (currentStep === 'concepts' && creationMode === 'automated')
+                  setCurrentStep('hooks');
+                else if (currentStep === 'concepts' && creationMode === 'manual')
+                  setCurrentStep('creation-mode');
               }}
               className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
             >
@@ -410,7 +477,9 @@ export function CreatePage() {
             </div>
             <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
               <div className="mb-6">
-                <p className="text-white font-semibold mb-2">Available Images: {availableAssets.length}</p>
+                <p className="text-white font-semibold mb-2">
+                  Available Images: {availableAssets.length}
+                </p>
                 <p className="text-slate-400 text-sm">Selected: {selectedAssets.length}</p>
               </div>
               <button
@@ -423,7 +492,11 @@ export function CreatePage() {
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {selectedAssets.map((asset, index) => (
                     <div key={asset.id} className="relative">
-                      <img src={asset.url} alt={`Selected ${index + 1}`} className="w-full h-32 object-cover rounded-lg border-2 border-blue-500" />
+                      <img
+                        src={asset.url}
+                        alt={`Selected ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border-2 border-blue-500"
+                      />
                       <div className="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                         {index + 1}
                       </div>
@@ -465,21 +538,32 @@ export function CreatePage() {
         ) : currentStep === 'output-type' ? (
           <OutputTypeStep onComplete={handleOutputTypeComplete} initialOutputType={outputType || undefined} />
         ) : currentStep === 'creation-mode' ? (
-          <CreationModeStep productData={productData} onComplete={handleCreationModeComplete} outputType={outputType || 'video'} />
+          <CreationModeStep
+            productData={productData}
+            onComplete={handleCreationModeComplete}
+            outputType={outputType || 'video'}
+          />
         ) : currentStep === 'hooks' ? (
           <div className="space-y-8">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-white mb-2">Choose Hooks for Your Concepts</h2>
               <p className="text-slate-400">Select trending hooks or create custom ones (optional)</p>
             </div>
-            <HooksPanel vertical={(productData as any)?.vertical || 'general'} onCustomHooksChange={setCustomHooks} />
+            <HooksPanel
+              vertical={(productData as any)?.vertical || 'general'}
+              onCustomHooksChange={setCustomHooks}
+            />
             <div className="flex justify-center">
               <button
                 onClick={handleGeneratePlans}
                 disabled={isPlanning}
                 className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
               >
-                {isPlanning ? 'Generating Plans…' : <>Generate 3 Concepts <ArrowRight size={20} /></>}
+                {isPlanning ? 'Generating Plans…' : (
+                  <>
+                    Generate 3 Concepts <ArrowRight size={20} />
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -489,7 +573,9 @@ export function CreatePage() {
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
                 <p className="text-slate-400">
-                  {creationMode === 'manual' ? 'Creating your custom video concept…' : 'Generating 3 concepts…'}
+                  {creationMode === 'manual'
+                    ? 'Creating your custom video concept…'
+                    : 'Generating 3 concepts…'}
                 </p>
               </div>
             ) : (
@@ -498,9 +584,16 @@ export function CreatePage() {
                   <h2 className="text-3xl font-bold text-white mb-2">
                     {creationMode === 'manual' ? 'Your Video Concept' : 'Your 3 Video Concepts'}
                   </h2>
-                  <p className="text-slate-400">Choose between video previews or instant static images</p>
+                  <p className="text-slate-400">
+                    Choose between video previews or instant static images
+                  </p>
                 </div>
-                <ModeTabs conceptsData={conceptsData} onGenerateStatic={handleGenerateStatic} generatingStatic={generatingStatic} creditsEnabled={typeof credits === 'number'} />
+                <ModeTabs
+                  conceptsData={conceptsData}
+                  onGenerateStatic={handleGenerateStatic}
+                  generatingStatic={generatingStatic}
+                  creditsEnabled={typeof credits === 'number'}
+                />
                 {!hasValidRenders && (
                   <div className="flex justify-center mt-8">
                     <button
@@ -508,7 +601,13 @@ export function CreatePage() {
                       disabled={isRendering}
                       className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
                     >
-                      {isRendering ? i18n.messages.rendering : <>{i18n.cta.create3} <ArrowRight size={20} /></>}
+                      {isRendering ? (
+                        i18n.messages.rendering
+                      ) : (
+                        <>
+                          {i18n.cta.create3} <ArrowRight size={20} />
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
@@ -521,7 +620,10 @@ export function CreatePage() {
       <ProductPickerModal
         open={showProductPicker}
         shopUrl={pendingUrl?.url || ''}
-        onClose={() => { setShowProductPicker(false); setPendingUrl(null); }}
+        onClose={() => {
+          setShowProductPicker(false);
+          setPendingUrl(null);
+        }}
         onSelect={handleProductSelect}
       />
 
@@ -532,7 +634,10 @@ export function CreatePage() {
         assets={availableAssets}
         selectedAssets={selectedAssets}
         onClose={() => setShowAssetModal(false)}
-        onConfirm={(selected) => { setSelectedAssets(selected); setShowAssetModal(false); }}
+        onConfirm={(selected) => {
+          setSelectedAssets(selected);
+          setShowAssetModal(false);
+        }}
         minSelection={3}
         maxSelection={5}
       />
@@ -541,10 +646,30 @@ export function CreatePage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Insufficient Credits</h3>
-            <p className="text-gray-700 mb-6">You need {creditError.needed} credits to generate static images, but you only have {creditError.current} credits remaining.</p>
+            <p className="text-gray-700 mb-6">
+              You need {creditError.needed} credits to generate static images, but you only have{' '}
+              {creditError.current} credits remaining.
+            </p>
             <div className="flex gap-3">
-              <button onClick={() => { setShowCreditDialog(false); setCreditError(null); navigate('/billing'); }} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Buy Credits</button>
-              <button onClick={() => { setShowCreditDialog(false); setCreditError(null); }} className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+              <button
+                onClick={() => {
+                  setShowCreditDialog(false);
+                  setCreditError(null);
+                  navigate('/billing');
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Buy Credits
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreditDialog(false);
+                  setCreditError(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
