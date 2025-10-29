@@ -177,90 +177,91 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
 
   let images: string[] = shopifyData?.images || [];
 
-  // Try JSON-LD structured data
-  if (images.length === 0 && jsonld?.image) {
-    images = Array.isArray(jsonld.image) ? jsonld.image : [jsonld.image];
-  }
+  try {
+    // Try JSON-LD structured data
+    if (images.length === 0 && jsonld?.image) {
+      const jsonImages = Array.isArray(jsonld.image) ? jsonld.image : [jsonld.image];
+      images = jsonImages.filter(img => typeof img === 'string' && img.startsWith('http'));
+    }
 
-  // Try Open Graph images
-  if (images.length === 0) {
-    const ogImage = extractMeta(html, 'og:image');
-    if (ogImage) images.push(ogImage);
-
-    // Look for additional OG images
-    const ogImageMatches = html.matchAll(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/gi);
-    for (const match of ogImageMatches) {
-      if (match[1] && !images.includes(match[1])) {
-        images.push(match[1]);
+    // Try Open Graph images
+    if (images.length === 0) {
+      const ogImage = extractMeta(html, 'og:image');
+      if (ogImage && ogImage.startsWith('http')) {
+        images.push(ogImage);
       }
     }
-  }
 
-  // Aggressively extract images from common product image patterns
-  if (images.length < 5) {
-    const imagePatterns = [
-      // Shopify CDN
-      /https?:\/\/cdn\.shopify\.com\/s\/files\/[^\s"'>]+/g,
-      // Generic product images
-      /<img[^>]*src=["']([^"']+)["'][^>]*(?:class=["'][^"']*product[^"']*["']|alt=[^>]*product)/gi,
-      /<img[^>]*(?:class=["'][^"']*product[^"']*["']|alt=[^>]*product)[^>]*src=["']([^"']+)["']/gi,
-      // Gallery images
-      /<img[^>]*src=["']([^"']+)["'][^>]*(?:class=["'][^"']*gallery[^"']*["'])/gi,
-      // High-res images
-      /<img[^>]*src=["']([^"']+)["'][^>]*(?:width=["'][5-9]\d{2,}|height=["'][5-9]\d{2,})/gi,
-      // Data attributes commonly used for lazy loading
-      /data-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi,
-      /data-image=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi,
-    ];
-
-    const extractedImages = new Set(images);
-
-    for (const pattern of imagePatterns) {
-      const matches = html.matchAll(pattern);
-      for (const match of matches) {
-        let imageUrl = match[1];
-
-        // Skip if it's not a valid image URL
-        if (!imageUrl || imageUrl.includes('logo') || imageUrl.includes('icon') || imageUrl.includes('sprite')) {
-          continue;
+    // Extract Shopify CDN images using simple match
+    if (images.length < 10) {
+      const shopifyMatches = html.match(/https?:\/\/cdn\.shopify\.com\/s\/files\/[^\s"'>]+/g) || [];
+      for (const img of shopifyMatches) {
+        if (!images.includes(img) && !img.includes('logo') && !img.includes('icon')) {
+          images.push(img);
         }
+        if (images.length >= 15) break;
+      }
+    }
 
-        // Convert relative URLs to absolute
+    // Extract all img tags using match instead of matchAll
+    if (images.length < 10) {
+      const imgMatches = html.match(/<img[^>]+src=["']([^"']+)["']/gi) || [];
+
+      for (const match of imgMatches) {
         try {
+          const srcMatch = match.match(/src=["']([^"']+)["']/);
+          if (!srcMatch) continue;
+
+          let imageUrl = srcMatch[1];
+
+          // Skip unwanted images
+          if (!imageUrl || imageUrl.includes('logo') || imageUrl.includes('icon')) {
+            continue;
+          }
+
+          // Convert relative URLs to absolute
           if (imageUrl.startsWith('//')) {
             imageUrl = 'https:' + imageUrl;
           } else if (imageUrl.startsWith('/')) {
-            const baseUrl = new URL(url);
-            imageUrl = `${baseUrl.protocol}//${baseUrl.host}${imageUrl}`;
+            try {
+              const baseUrl = new URL(url);
+              imageUrl = `${baseUrl.protocol}//${baseUrl.host}${imageUrl}`;
+            } catch (e) {
+              continue;
+            }
+          } else if (!imageUrl.startsWith('http')) {
+            continue;
           }
 
-          // Only add URLs that look like valid image URLs
-          if (imageUrl.match(/\.(jpg|jpeg|png|webp)(\?|$)/i)) {
-            extractedImages.add(imageUrl);
+          // Only add valid image URLs
+          if ((imageUrl.match(/\.(jpg|jpeg|png|webp|gif)/i) || imageUrl.includes('cdn.shopify.com')) &&
+              !images.includes(imageUrl)) {
+            images.push(imageUrl);
           }
 
-          if (extractedImages.size >= 10) break;
+          if (images.length >= 15) break;
         } catch (e) {
           continue;
         }
       }
-      if (extractedImages.size >= 10) break;
     }
 
-    images = Array.from(extractedImages);
+    // Clean and deduplicate images
+    images = images
+      .filter(img => img && img.startsWith('http'))
+      .filter((img, index, self) => self.indexOf(img) === index)
+      .slice(0, 10);
+
+    logger.info('Image extraction complete', {
+      url,
+      extractedCount: images.length,
+      sampleImages: images.slice(0, 3).map(i => i.substring(0, 80)),
+    });
+  } catch (error) {
+    logger.error('Error during image extraction', { error, url });
+    // Continue with empty images array
+    images = [];
   }
-
-  // Clean and deduplicate images
-  images = images
-    .filter(img => img && img.startsWith('http'))
-    .filter((img, index, self) => self.indexOf(img) === index)
-    .slice(0, 10);
-
-  logger.info('Image extraction complete', {
-    url,
-    extractedCount: images.length,
-    images: images.map(i => i.substring(0, 80)),
-  });
 
   const bullets = extractBullets(html);
   const brandName = extractBrandName(url, html);
