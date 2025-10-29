@@ -3,6 +3,7 @@ import { Sparkles, Play, Wand2, Upload, X, Plus, Loader2 } from 'lucide-react';
 import { TopNav } from '../components/TopNav';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { useUserCredits } from '../hooks/useUserCredits';
+import { useAuth } from '../contexts/AuthContext';
 import {
   plan as promptPlan,
   renderPreviews as promptRenderPreview,
@@ -18,6 +19,7 @@ interface ValidationError {
 }
 
 export function PromptPage() {
+  const { user } = useAuth();
   useUserCredits();
 
   const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16');
@@ -125,16 +127,31 @@ export function PromptPage() {
   const handleRenderPreview = async () => {
     if (!promptId || !validateForm()) return;
 
+    if (!user) {
+      setErrors([{
+        field: 'general',
+        message: 'Please sign in to render videos',
+      }]);
+      return;
+    }
+
     setIsRenderingPreview(true);
     setErrors([]);
 
     try {
       const response = await promptRenderPreview({
         projectId: promptId,
-        userId: 'temp-user',
-      } as any);
+        userId: user.id,
+      });
 
-      setCurrentRunId((response as any).runId);
+      // Extract runId from response (API now includes it for convenience)
+      const runId = response.runId || response.runs?.[0]?.id;
+
+      if (!runId) {
+        throw new Error('No render job was created. Please try again.');
+      }
+
+      setCurrentRunId(runId);
     } catch (error) {
       setErrors([{
         field: 'general',
@@ -147,16 +164,31 @@ export function PromptPage() {
   const handleRenderFinal = async () => {
     if (!promptId || !validateForm()) return;
 
+    if (!user) {
+      setErrors([{
+        field: 'general',
+        message: 'Please sign in to render videos',
+      }]);
+      return;
+    }
+
     setIsRenderingFinal(true);
     setErrors([]);
 
     try {
       const response = await promptRenderFinal({
         projectId: promptId,
-        userId: 'temp-user',
-      } as any);
+        userId: user.id,
+      });
 
-      setCurrentRunId((response as any).runId);
+      // Extract runId from response (API now includes it for convenience)
+      const runId = response.runId || response.runs?.[0]?.id;
+
+      if (!runId) {
+        throw new Error('No render job was created. Please try again.');
+      }
+
+      setCurrentRunId(runId);
     } catch (error) {
       setErrors([{
         field: 'general',
@@ -169,9 +201,30 @@ export function PromptPage() {
   useEffect(() => {
     if (!currentRunId || (!isRenderingPreview && !isRenderingFinal)) return;
 
+    let pollCount = 0;
+    const maxPolls = 300; // 10 minutes max (300 polls × 2 seconds)
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5;
+
     const pollInterval = setInterval(async () => {
+      pollCount++;
+
+      // Timeout after max polls
+      if (pollCount > maxPolls) {
+        clearInterval(pollInterval);
+        setErrors([{
+          field: 'general',
+          message: 'Video generation timed out. Please try again.',
+        }]);
+        setIsRenderingPreview(false);
+        setIsRenderingFinal(false);
+        setCurrentRunId(null);
+        return;
+      }
+
       try {
         const status = await getPromptJobStatus(currentRunId);
+        consecutiveErrors = 0; // Reset error count on successful poll
 
         if (status.status === 'succeeded') {
           setVideoUrl(status.videoUrl || null);
@@ -190,7 +243,20 @@ export function PromptPage() {
           clearInterval(pollInterval);
         }
       } catch (error) {
-        console.error('Error polling job status:', error);
+        consecutiveErrors++;
+        console.error('Error polling job status:', error, `(${consecutiveErrors}/${maxConsecutiveErrors})`);
+
+        // Stop polling after too many consecutive errors
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          clearInterval(pollInterval);
+          setErrors([{
+            field: 'general',
+            message: 'Unable to check render status. Please refresh the page.',
+          }]);
+          setIsRenderingPreview(false);
+          setIsRenderingFinal(false);
+          setCurrentRunId(null);
+        }
       }
     }, 2000);
 

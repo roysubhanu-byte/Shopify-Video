@@ -197,6 +197,7 @@ router.post('/api/render/previews', async (req, res) => {
 
     res.json({
       success: true,
+      runId: runs.length > 0 ? runs[0].id : null, // First run ID for convenience
       runs: runs.map((r) => ({
         id: r.id,
         variantId: r.variant_id,
@@ -443,6 +444,7 @@ router.post('/api/render/finals', async (req, res) => {
 
     res.json({
       success: true,
+      runId: runs.length > 0 ? runs[0].id : null, // First run ID for convenience
       runs: runs.map((r) => ({
         id: r.id,
         variantId: r.variant_id,
