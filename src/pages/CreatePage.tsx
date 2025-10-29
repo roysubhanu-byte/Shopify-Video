@@ -536,25 +536,69 @@ export function CreatePage() {
 
   useEffect(() => {
     if (!currentRunId || !isRendering) return;
+
+    const startTime = Date.now();
+    const maxPollingTime = 5 * 60 * 1000; // 5 minutes timeout
+
     const poll = setInterval(async () => {
       try {
-        const status = await getJobStatus(currentRunId);
-        status.variants.forEach((variantData: any) => setRender(variantData.variantId, variantData));
-        if (status.status === 'succeeded' || status.status === 'failed') {
+        // Check for timeout
+        const elapsed = Date.now() - startTime;
+        if (elapsed > maxPollingTime) {
+          console.error('[Create] Video generation timeout after 5 minutes');
           setIsRendering(false);
           setCurrentRunId(null);
           clearInterval(poll);
+          addToast('error', 'Video generation timed out. Please try again.');
+          return;
+        }
+
+        const status = await getJobStatus(currentRunId);
+        console.log('[Create] Poll status:', status);
+
+        // Update variant renders if available
+        if (status.variants && Array.isArray(status.variants)) {
+          status.variants.forEach((variantData: any) => setRender(variantData.variantId, variantData));
+        }
+
+        // Check for completion or failure
+        if (status.status === 'succeeded' || status.state === 'succeeded') {
+          console.log('[Create] Video generation succeeded');
+          setIsRendering(false);
+          setCurrentRunId(null);
+          clearInterval(poll);
+          addToast('success', 'Video preview generated successfully!');
+        } else if (status.status === 'failed' || status.state === 'failed') {
+          console.error('[Create] Video generation failed:', status.error);
+          setIsRendering(false);
+          setCurrentRunId(null);
+          clearInterval(poll);
+          addToast('error', status.error || 'Video generation failed. Please try again.');
         }
       } catch (e) {
-        console.error('Error polling job status:', e);
+        console.error('[Create] Error polling job status:', e);
+        // Don't stop polling on network errors, but count them
+        const elapsed = Date.now() - startTime;
+        if (elapsed > maxPollingTime) {
+          setIsRendering(false);
+          setCurrentRunId(null);
+          clearInterval(poll);
+          addToast('error', 'Unable to check video status. Please refresh the page.');
+        }
       }
     }, 2000);
+
     return () => clearInterval(poll);
-  }, [currentRunId, isRendering, setRender, setCurrentRunId]);
+  }, [currentRunId, isRendering, setRender, setCurrentRunId, addToast]);
 
   const hasValidRenders = variants.some(v => {
     const r = renders.get(v.id);
     return r?.status === 'succeeded' && r?.videoUrl;
+  });
+
+  const hasFailedRenders = variants.some(v => {
+    const r = renders.get(v.id);
+    return r?.status === 'failed';
   });
 
   const conceptsData = variants.map(v => {
@@ -801,13 +845,28 @@ export function CreatePage() {
                   creditsEnabled={typeof credits === 'number'}
                 />
                 {!hasValidRenders && (
-                  <div className="flex justify-center mt-8">
+                  <div className="flex flex-col items-center gap-4 mt-8">
+                    {hasFailedRenders && !isRendering && (
+                      <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 max-w-xl w-full text-center">
+                        <p className="text-red-400 mb-2">Video generation failed</p>
+                        <p className="text-slate-400 text-sm">There was an issue generating your video preview. Please try again.</p>
+                      </div>
+                    )}
                     <button
                       onClick={handleCreatePreviews}
                       disabled={isRendering}
                       className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
                     >
-                      {isRendering ? i18n.messages.rendering : <>Generate Video Preview <ArrowRight size={20} /></>}
+                      {isRendering ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          {i18n.messages.rendering}
+                        </>
+                      ) : hasFailedRenders ? (
+                        <>Retry Video Generation <ArrowRight size={20} /></>
+                      ) : (
+                        <>Generate Video Preview <ArrowRight size={20} /></>
+                      )}
                     </button>
                   </div>
                 )}

@@ -695,8 +695,11 @@ router.get('/api/render/status/:runId', async (req, res) => {
       .maybeSingle();
 
     if (error || !run) {
+      logger.error('Run not found', { runId, error });
       return res.status(404).json({ error: 'Run not found' });
     }
+
+    logger.info('Fetching run status', { runId, state: run.state, hasVariant: !!run.variants });
 
     // Calculate estimated time based on video duration and state
     let estimatedTime = 0;
@@ -708,31 +711,54 @@ router.get('/api/render/status/:runId', async (req, res) => {
     } else if (run.state === 'running') {
       estimatedTime = run.cost_seconds * 10;
       progress = 50;
-    } else if (run.state === 'completed') {
+    } else if (run.state === 'succeeded' || run.state === 'completed') {
       progress = 100;
+    } else if (run.state === 'failed') {
+      progress = 0;
+    }
+
+    // Determine final status
+    let finalStatus = 'processing';
+    if (run.state === 'succeeded' || run.state === 'completed') {
+      finalStatus = 'succeeded';
+    } else if (run.state === 'failed') {
+      finalStatus = 'failed';
     }
 
     // Format response to match frontend expectations
     const variantData = run.variants ? {
       variantId: run.variant_id,
-      status: run.state === 'succeeded' ? 'succeeded' : run.state === 'failed' ? 'failed' : 'processing',
+      status: finalStatus,
       videoUrl: run.variants.video_url,
       error: run.error,
     } : null;
 
-    res.json({
-      status: run.state === 'succeeded' ? 'succeeded' : run.state === 'failed' ? 'failed' : 'processing',
+    // Include detailed error information if available
+    let errorMessage = run.error;
+    if (run.state === 'failed' && !errorMessage) {
+      errorMessage = 'Video generation failed. Please try again.';
+    }
+
+    const response = {
+      status: finalStatus,
       state: run.state,
       progress,
       videoUrl: run.variants?.video_url,
-      error: run.error,
+      error: errorMessage,
       estimatedTime,
       createdAt: run.created_at,
       variants: variantData ? [variantData] : [],
-    });
+    };
+
+    logger.info('Returning run status', { runId, status: finalStatus, hasError: !!errorMessage });
+
+    res.json(response);
   } catch (error) {
     logger.error('Get render status error', { error });
-    res.status(500).json({ error: 'Failed to get render status' });
+    res.status(500).json({
+      error: 'Failed to get render status',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 

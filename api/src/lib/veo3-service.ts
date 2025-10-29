@@ -299,100 +299,217 @@ export async function pollVideoGenerationAndSave(
   operationName: string,
   runId: string
 ): Promise<void> {
-  const apiKey = getGoogleApiKey();
-  if (!apiKey) {
-    throw new Error('Google API key not configured');
-  }
+  const { supabase } = await import('./supabase.js');
 
-  const ai = new GoogleGenAI({ apiKey });
+  try {
+    const apiKey = getGoogleApiKey();
+    if (!apiKey) {
+      const errorMsg = 'Google API key not configured';
+      logger.error(errorMsg, { runId });
 
-  logger.info('Starting background polling for video generation', {
-    operationName,
-    runId,
-  });
+      // Update run to failed state
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
 
-  let operation = await ai.operations.getVideosOperation({
-    operation: { name: operationName } as any
-  });
-
-  let pollCount = 0;
-  const maxPolls = 120;
-
-  while (!operation.done) {
-    pollCount++;
-
-    if (pollCount > maxPolls) {
-      throw new Error('Video generation timed out after 20 minutes');
+      throw new Error(errorMsg);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-    logger.info(`Background polling... (${pollCount}/${maxPolls})`, {
+    const ai = new GoogleGenAI({ apiKey });
+
+    logger.info('Starting background polling for video generation', {
       operationName,
       runId,
     });
 
-    operation = await ai.operations.getVideosOperation({ operation });
-  }
+    let operation = await ai.operations.getVideosOperation({
+      operation: { name: operationName } as any
+    });
 
-  if (!operation?.response) {
-    throw new Error('Video generation failed - no response from API');
-  }
+    let pollCount = 0;
+    const maxPolls = 120;
 
-  const videos = operation.response.generatedVideos;
-  if (!videos || videos.length === 0) {
-    throw new Error('No videos were generated');
-  }
+    while (!operation.done) {
+      pollCount++;
 
-  const firstVideo = videos[0];
-  if (!firstVideo?.video?.uri) {
-    throw new Error('Generated video is missing a URI');
-  }
+      if (pollCount > maxPolls) {
+        const errorMsg = 'Video generation timed out after 20 minutes';
+        logger.error(errorMsg, { runId, pollCount });
 
-  const videoObject = firstVideo.video;
-  const url = decodeURIComponent(videoObject.uri);
+        // Update run to failed state
+        await supabase
+          .from('runs')
+          .update({
+            state: 'failed',
+            error: errorMsg,
+          })
+          .eq('id', runId);
 
-  logger.info('Video generated, fetching file', { url, runId });
+        // Update variant to error state
+        const { data: run } = await supabase
+          .from('runs')
+          .select('variant_id')
+          .eq('id', runId)
+          .maybeSingle();
 
-  const videoResponse = await fetch(`${url}&key=${apiKey}`);
-  if (!videoResponse.ok) {
-    throw new Error(`Failed to fetch generated video: ${videoResponse.status}`);
-  }
+        if (run?.variant_id) {
+          await supabase
+            .from('variants')
+            .update({ status: 'error' })
+            .eq('id', run.variant_id);
+        }
 
-  const videoBlob = await videoResponse.blob();
-  const fileName = `videos/run-${runId}-${Date.now()}.mp4`;
-  const buffer = Buffer.from(await videoBlob.arrayBuffer());
-  const videoUrl = await uploadPublic(buffer, fileName, 'video/mp4');
+        throw new Error(errorMsg);
+      }
 
-  logger.info('Video uploaded to storage', { videoUrl, runId });
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      logger.info(`Background polling... (${pollCount}/${maxPolls})`, {
+        operationName,
+        runId,
+      });
 
-  // Update run in database
-  const { supabase } = await import('./supabase.js');
-  await supabase
-    .from('runs')
-    .update({
-      state: 'succeeded',
-      response_json: { videoUrl },
-    })
-    .eq('id', runId);
+      operation = await ai.operations.getVideosOperation({ operation });
+    }
 
-  // Update variant
-  const { data: run } = await supabase
-    .from('runs')
-    .select('variant_id')
-    .eq('id', runId)
-    .maybeSingle();
+    if (!operation?.response) {
+      const errorMsg = 'Video generation failed - no response from API';
+      logger.error(errorMsg, { runId, operation });
 
-  if (run?.variant_id) {
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
+
+      throw new Error(errorMsg);
+    }
+
+    const videos = operation.response.generatedVideos;
+    if (!videos || videos.length === 0) {
+      const errorMsg = 'No videos were generated';
+      logger.error(errorMsg, { runId });
+
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
+
+      throw new Error(errorMsg);
+    }
+
+    const firstVideo = videos[0];
+    if (!firstVideo?.video?.uri) {
+      const errorMsg = 'Generated video is missing a URI';
+      logger.error(errorMsg, { runId });
+
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
+
+      throw new Error(errorMsg);
+    }
+
+    const videoObject = firstVideo.video;
+    const url = decodeURIComponent(videoObject.uri);
+
+    logger.info('Video generated, fetching file', { url, runId });
+
+    const videoResponse = await fetch(`${url}&key=${apiKey}`);
+    if (!videoResponse.ok) {
+      const errorMsg = `Failed to fetch generated video: ${videoResponse.status}`;
+      logger.error(errorMsg, { runId, url });
+
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
+
+      throw new Error(errorMsg);
+    }
+
+    const videoBlob = await videoResponse.blob();
+    const fileName = `videos/run-${runId}-${Date.now()}.mp4`;
+    const buffer = Buffer.from(await videoBlob.arrayBuffer());
+    const videoUrl = await uploadPublic(buffer, fileName, 'video/mp4');
+
+    logger.info('Video uploaded to storage', { videoUrl, runId });
+
+    // Update run in database
     await supabase
-      .from('variants')
+      .from('runs')
       .update({
-        status: 'completed',
-        video_url: videoUrl,
+        state: 'succeeded',
+        response_json: { videoUrl },
       })
-      .eq('id', run.variant_id);
-  }
+      .eq('id', runId);
 
-  logger.info('Background video generation complete', { runId, videoUrl });
+    // Update variant
+    const { data: run } = await supabase
+      .from('runs')
+      .select('variant_id')
+      .eq('id', runId)
+      .maybeSingle();
+
+    if (run?.variant_id) {
+      await supabase
+        .from('variants')
+        .update({
+          status: 'completed',
+          video_url: videoUrl,
+        })
+        .eq('id', run.variant_id);
+    }
+
+    logger.info('Background video generation complete', { runId, videoUrl });
+  } catch (error) {
+    // Catch any unexpected errors and update database
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error during video generation';
+    logger.error('Background video generation failed', { runId, error: errorMsg });
+
+    try {
+      await supabase
+        .from('runs')
+        .update({
+          state: 'failed',
+          error: errorMsg,
+        })
+        .eq('id', runId);
+
+      // Update variant to error state
+      const { data: run } = await supabase
+        .from('runs')
+        .select('variant_id')
+        .eq('id', runId)
+        .maybeSingle();
+
+      if (run?.variant_id) {
+        await supabase
+          .from('variants')
+          .update({ status: 'error' })
+          .eq('id', run.variant_id);
+      }
+    } catch (dbError) {
+      logger.error('Failed to update database after error', { runId, dbError });
+    }
+
+    throw error;
+  }
 }
 
 /**
