@@ -81,6 +81,9 @@ export const BeatSchema = z.object({
   // Text overlays
   overlays: z.array(OverlaySchema).max(3),
 
+  // CTA text (for cta beat type)
+  ctaText: z.enum(['Learn More', 'Buy Now', 'Shop Now', 'Order Now', 'Get Yours', 'Limited Time']).optional(),
+
   // VEO3 specific
   prompt: z.string().max(2000),
   seed: z.number().int().positive().optional(),

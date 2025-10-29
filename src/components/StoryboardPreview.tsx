@@ -24,6 +24,8 @@ interface StoryboardPreviewProps {
   productName?: string;
   onReorder?: (newOrder: Asset[]) => void;
   onEditAssets?: () => void;
+  ctaText?: string;
+  onCtaTextChange?: (text: string) => void;
 }
 
 const defaultBeats: Beat[] = [
@@ -58,6 +60,8 @@ export default function StoryboardPreview({
   hook,
   onReorder,
   onEditAssets,
+  ctaText,
+  onCtaTextChange,
 }: StoryboardPreviewProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -135,6 +139,8 @@ export default function StoryboardPreview({
                   duration={beat.duration}
                   isDragging={draggedIndex === index}
                   dragHandleProps={onReorder ? {} : undefined}
+                  ctaText={beat.beatNumber === 4 ? ctaText : undefined}
+                  onCtaTextChange={beat.beatNumber === 4 ? onCtaTextChange : undefined}
                 />
               </div>
             );

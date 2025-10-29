@@ -220,6 +220,15 @@ function parseWebPDimensions(bytes: Uint8Array): { width: number; height: number
 function determineAssetType(url: string, width: number | null, height: number | null): ProductAsset['asset_type'] {
   const urlLower = url.toLowerCase();
 
+  // Skip logos and icons - mark as unknown so they can be filtered
+  if (urlLower.includes('logo') ||
+      urlLower.includes('icon') ||
+      urlLower.includes('favicon') ||
+      urlLower.includes('badge') ||
+      urlLower.includes('avatar')) {
+    return 'unknown';
+  }
+
   // Check URL for hints
   if (urlLower.includes('lifestyle') || urlLower.includes('scene') || urlLower.includes('model')) {
     return 'lifestyle';
@@ -236,6 +245,12 @@ function determineAssetType(url: string, width: number | null, height: number | 
   // Use dimensions as hints
   if (width && height) {
     const aspectRatio = width / height;
+    const minDimension = Math.min(width, height);
+
+    // Very small images are likely logos/icons
+    if (minDimension < 200) {
+      return 'unknown';
+    }
 
     // Square-ish images are often product shots
     if (aspectRatio > 0.9 && aspectRatio < 1.1) {
@@ -248,7 +263,7 @@ function determineAssetType(url: string, width: number | null, height: number | 
     }
   }
 
-  return 'unknown';
+  return 'product';
 }
 
 /**

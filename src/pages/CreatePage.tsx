@@ -64,6 +64,7 @@ export function CreatePage() {
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
   const [showAssetModal, setShowAssetModal] = useState(false);
+  const [ctaText, setCtaText] = useState('Shop Now');
 
   const {
     projectId,
@@ -706,6 +707,8 @@ export function CreatePage() {
                 productName={(productData as any)?.title}
                 onReorder={setSelectedAssets}
                 onEditAssets={() => setShowAssetModal(true)}
+                ctaText={ctaText}
+                onCtaTextChange={setCtaText}
               />
             </div>
             <div className="flex justify-center">

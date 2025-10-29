@@ -638,10 +638,10 @@ router.post('/api/render/swap-hook', async (req, res) => {
 });
 
 /**
- * GET /api/render/:runId/status
- * Get render status
+ * GET /api/render/status/:runId
+ * Get render status with progress
  */
-router.get('/api/render/:runId/status', async (req, res) => {
+router.get('/api/render/status/:runId', async (req, res) => {
   try {
     const { runId } = req.params;
 
@@ -655,13 +655,26 @@ router.get('/api/render/:runId/status', async (req, res) => {
       return res.status(404).json({ error: 'Run not found' });
     }
 
+    // Calculate estimated time based on video duration and state
+    let estimatedTime = 0;
+    let progress = 0;
+
+    if (run.state === 'queued') {
+      estimatedTime = run.cost_seconds * 10;
+      progress = 0;
+    } else if (run.state === 'running') {
+      estimatedTime = run.cost_seconds * 10;
+      progress = 50;
+    } else if (run.state === 'completed') {
+      progress = 100;
+    }
+
     res.json({
-      id: run.id,
-      variantId: run.variant_id,
-      engine: run.engine,
       state: run.state,
+      progress,
       videoUrl: run.variants?.video_url,
       error: run.error,
+      estimatedTime,
       createdAt: run.created_at,
     });
   } catch (error) {

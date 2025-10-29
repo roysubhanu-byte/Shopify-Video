@@ -196,7 +196,17 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
     if (images.length < 10) {
       const shopifyMatches = html.match(/https?:\/\/cdn\.shopify\.com\/s\/files\/[^\s"'>]+/g) || [];
       for (const img of shopifyMatches) {
-        if (!images.includes(img) && !img.includes('logo') && !img.includes('icon')) {
+        // Skip logos, icons, and small images
+        const imgLower = img.toLowerCase();
+        if (imgLower.includes('logo') ||
+            imgLower.includes('icon') ||
+            imgLower.includes('favicon') ||
+            imgLower.includes('badge') ||
+            imgLower.match(/_\d+x\d+\.(jpg|jpeg|png|webp)/) && !imgLower.match(/_\d{3,}x\d{3,}\.(jpg|jpeg|png|webp)/)) {
+          continue;
+        }
+
+        if (!images.includes(img)) {
           images.push(img);
         }
         if (images.length >= 15) break;
@@ -214,8 +224,16 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
 
           let imageUrl = srcMatch[1];
 
-          // Skip unwanted images
-          if (!imageUrl || imageUrl.includes('logo') || imageUrl.includes('icon')) {
+          // Skip unwanted images - logos, icons, badges, small thumbnails
+          const urlLower = imageUrl.toLowerCase();
+          if (!imageUrl ||
+              urlLower.includes('logo') ||
+              urlLower.includes('icon') ||
+              urlLower.includes('favicon') ||
+              urlLower.includes('badge') ||
+              urlLower.includes('avatar') ||
+              urlLower.includes('thumbnail') ||
+              urlLower.match(/_\d+x\d+\.(jpg|jpeg|png|webp)/) && !urlLower.match(/_\d{3,}x\d{3,}\.(jpg|jpeg|png|webp)/)) {
             continue;
           }
 

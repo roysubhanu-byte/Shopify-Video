@@ -8,7 +8,11 @@ interface BeatCardProps {
   duration: number;
   isDragging?: boolean;
   dragHandleProps?: any;
+  ctaText?: string;
+  onCtaTextChange?: (text: string) => void;
 }
+
+const CTA_OPTIONS = ['Learn More', 'Buy Now', 'Shop Now', 'Order Now', 'Get Yours', 'Limited Time'];
 
 const beatColors = {
   1: 'border-blue-500 bg-blue-50',
@@ -32,7 +36,11 @@ export default function BeatCard({
   duration,
   isDragging = false,
   dragHandleProps,
+  ctaText,
+  onCtaTextChange,
 }: BeatCardProps) {
+  const isCTABeat = beatNumber === 4;
+
   return (
     <div
       className={`relative flex gap-4 p-4 border-2 rounded-lg transition-all ${
@@ -78,6 +86,25 @@ export default function BeatCard({
 
         <h4 className="font-semibold text-gray-900 mb-1">{beatTitle}</h4>
         <p className="text-sm text-gray-600 line-clamp-2">{beatDescription}</p>
+
+        {isCTABeat && onCtaTextChange && (
+          <div className="mt-3">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Call-to-Action Text
+            </label>
+            <select
+              value={ctaText || 'Shop Now'}
+              onChange={(e) => onCtaTextChange(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            >
+              {CTA_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );
