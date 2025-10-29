@@ -87,7 +87,7 @@ export class TimeoutMonitor {
       .from('runs')
       .select('*')
       .in('state', ['queued', 'running'])
-      .eq('engine', 'veo_fast')
+      .eq('engine', 'veo3_fast')
       .lt('created_at', previewCutoff)
       .or('request_json->>duration.eq.9,request_json->>duration.is.null');
 
@@ -99,7 +99,7 @@ export class TimeoutMonitor {
       .from('runs')
       .select('*')
       .in('state', ['queued', 'running'])
-      .eq('engine', 'veo_fast')
+      .eq('engine', 'veo3_fast')
       .lt('created_at', finalCutoff)
       .eq('request_json->>duration', '24');
 

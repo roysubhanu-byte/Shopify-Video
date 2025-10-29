@@ -12,6 +12,16 @@ import { logger } from './logger.js';
 import { uploadPublic } from './storage.js';
 import { getGoogleApiKey } from './google.js';
 
+// Veo 3.0 Model Constants
+export const VEO_MODELS = {
+  VEO3_FULL: 'veo-3.0-generate-001',
+  VEO3_FAST: 'veo-3.0-fast-generate-001',
+  VEO3_1_PREVIEW: 'veo-3.1-generate-preview',
+  VEO3_1_FAST_PREVIEW: 'veo-3.1-fast-generate-preview',
+} as const;
+
+export type VeoModel = typeof VEO_MODELS[keyof typeof VEO_MODELS];
+
 export interface VideoGenerationConfig {
   prompt: string;
   referenceImages?: Array<{
@@ -38,7 +48,8 @@ export async function generateVideoWithVeo3(
 ): Promise<VideoGenerationResult> {
   const startTime = Date.now();
 
-  logger.info('Starting VEO3 video generation', {
+  logger.info('Starting Veo 3.0 video generation', {
+    model: config.model || VEO_MODELS.VEO3_FULL,
     promptLength: config.prompt.length,
     referenceImageCount: config.referenceImages?.length || 0,
     resolution: config.resolution || '720p',
@@ -71,7 +82,7 @@ export async function generateVideoWithVeo3(
 
   // Prepare the generation payload
   const generateVideoPayload: any = {
-    model: config.model || 'veo-2.0-generate-001',
+    model: config.model || VEO_MODELS.VEO3_FULL,
     config: veoConfig,
     prompt: config.prompt,
   };
@@ -116,7 +127,7 @@ export async function generateVideoWithVeo3(
     }
   }
 
-  logger.info('Submitting video generation request to VEO3', {
+  logger.info('Submitting video generation request to Veo 3.0', {
     model: generateVideoPayload.model,
     hasReferenceImages: !!generateVideoPayload.config.referenceImages,
   });
@@ -223,7 +234,8 @@ export async function generateVideoWithVeo3(
 export async function startVideoGeneration(
   config: VideoGenerationConfig
 ): Promise<{ operationName: string; operationId: string }> {
-  logger.info('Starting async VEO3 video generation', {
+  logger.info('Starting async Veo 3.0 video generation', {
+    model: config.model || VEO_MODELS.VEO3_FULL,
     promptLength: config.prompt.length,
     referenceImageCount: config.referenceImages?.length || 0,
   });
@@ -242,7 +254,7 @@ export async function startVideoGeneration(
   };
 
   const generateVideoPayload: any = {
-    model: config.model || 'veo-2.0-generate-001',
+    model: config.model || VEO_MODELS.VEO3_FULL,
     config: veoConfig,
     prompt: config.prompt,
   };
@@ -281,7 +293,8 @@ export async function startVideoGeneration(
 
   const operation = await ai.models.generateVideos(generateVideoPayload);
 
-  logger.info('Video generation operation started (async)', {
+  logger.info('Veo 3.0 video generation operation started (async)', {
+    model: generateVideoPayload.model,
     operationName: operation.name,
   });
 
@@ -321,7 +334,7 @@ export async function pollVideoGenerationAndSave(
 
     const ai = new GoogleGenAI({ apiKey });
 
-    logger.info('Starting background polling for video generation', {
+    logger.info('Starting background polling for Veo 3.0 video generation', {
       operationName,
       runId,
     });
@@ -476,7 +489,7 @@ export async function pollVideoGenerationAndSave(
         .eq('id', run.variant_id);
     }
 
-    logger.info('Background video generation complete', { runId, videoUrl });
+    logger.info('Background Veo 3.0 video generation complete', { runId, videoUrl });
   } catch (error) {
     // Catch any unexpected errors and update database
     const errorMsg = error instanceof Error ? error.message : 'Unknown error during video generation';
@@ -513,23 +526,23 @@ export async function pollVideoGenerationAndSave(
 }
 
 /**
- * Test VEO3 connection and API key
+ * Test Veo 3.0 connection and API key
  */
 export async function testVeo3Connection(): Promise<boolean> {
   try {
     const apiKey = getGoogleApiKey();
     if (!apiKey) {
-      logger.error('Google API key not configured for VEO3 test');
+      logger.error('Google API key not configured for Veo 3.0 test');
       return false;
     }
 
     const ai = new GoogleGenAI({ apiKey });
 
     // Try to initialize - if API key is invalid, this will fail
-    logger.info('VEO3 connection test successful');
+    logger.info('Veo 3.0 connection test successful', { model: VEO_MODELS.VEO3_FULL });
     return true;
   } catch (error) {
-    logger.error('VEO3 connection test failed:', error);
+    logger.error('Veo 3.0 connection test failed:', error);
     return false;
   }
 }

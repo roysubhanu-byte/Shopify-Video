@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
 import { Plan } from '../types/plan';
-import { generateVideoWithVeo3, startVideoGeneration, pollVideoGenerationAndSave } from '../lib/veo3-service';
+import { generateVideoWithVeo3, startVideoGeneration, pollVideoGenerationAndSave, VEO_MODELS } from '../lib/veo3-service';
 import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
 import { hasGoogle } from '../lib/google';
 
@@ -29,7 +29,7 @@ router.post('/api/render/previews', async (req, res) => {
     if (!hasGoogle()) {
       return res.status(400).json({
         error:
-          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable video previews.',
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_Veo 3.0_API_KEY) to enable video previews.',
       });
     }
 
@@ -90,9 +90,9 @@ router.post('/api/render/previews', async (req, res) => {
         .from('runs')
         .insert({
           variant_id: variant.id,
-          engine: 'veo_fast',
+          engine: 'veo3_fast',
           state: 'queued',
-          veo_model: 'veo_fast',
+          veo_model: 'veo-3.0-fast-generate-001',
           beat_duration: 6,
           request_json: control,
           cost_seconds: 9,
@@ -118,7 +118,7 @@ router.post('/api/render/previews', async (req, res) => {
       const firstBeat = plan.beats[0];
       const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
 
-      logger.info('[RENDER] Calling VEO3 Fast', {
+      logger.info('[RENDER] Calling Veo 3.0 Fast', {
         runId: run.id,
         variantId: variant.id,
         seed,
@@ -127,12 +127,12 @@ router.post('/api/render/previews', async (req, res) => {
         referenceUrls: referenceImages.map(url => url.substring(0, 80)),
       });
 
-      // Call VEO3 API (async - start and poll in background)
+      // Call Veo 3.0 API (async - start and poll in background)
       try {
         // Update run to running state
         await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
-        logger.info('[RENDER] Starting VEO3 video generation', {
+        logger.info('[RENDER] Starting Veo 3.0 video generation', {
           runId: run.id,
           variantId: variant.id,
         });
@@ -143,9 +143,10 @@ router.post('/api/render/previews', async (req, res) => {
           referenceImages: referenceImages.map((url: string) => ({ url, type: 'asset' as const })),
           resolution: '720p',
           aspectRatio: '9:16',
+          model: VEO_MODELS.VEO3_FAST,
         });
 
-        logger.info('[RENDER] VEO3 operation started, polling in background', {
+        logger.info('[RENDER] Veo 3.0 operation started, polling in background', {
           runId: run.id,
           operationName: operation.operationName,
         });
@@ -178,13 +179,13 @@ router.post('/api/render/previews', async (req, res) => {
 
         runs.push(run);
       } catch (veoError) {
-        logger.error('[RENDER] VEO3 API call failed', { runId: run.id, error: veoError });
+        logger.error('[RENDER] Veo 3.0 API call failed', { runId: run.id, error: veoError });
 
         await supabase
           .from('runs')
           .update({
             state: 'failed',
-            error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+            error: veoError instanceof Error ? veoError.message : 'Veo 3.0 API call failed',
           })
           .eq('id', run.id);
 
@@ -202,7 +203,7 @@ router.post('/api/render/previews', async (req, res) => {
         engine: r.engine,
         state: r.state,
       })),
-      message: `${runs.length} preview renders initiated with VEO3 Fast`,
+      message: `${runs.length} preview renders initiated with Veo 3.0 Fast`,
     });
   } catch (error) {
     logger.error('Preview render error', { error });
@@ -232,7 +233,7 @@ router.post('/api/render/finals', async (req, res) => {
     if (!hasGoogle()) {
       return res.status(400).json({
         error:
-          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable final video rendering.',
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_Veo 3.0_API_KEY) to enable final video rendering.',
       });
     }
 
@@ -323,9 +324,9 @@ router.post('/api/render/finals', async (req, res) => {
         .from('runs')
         .insert({
           variant_id: variant.id,
-          engine: 'veo_3',
+          engine: 'veo3_full',
           state: 'queued',
-          veo_model: 'veo_3',
+          veo_model: 'veo-3.0-generate-001',
           beat_duration: 6,
           request_json: control,
           cost_seconds: plan.targetDuration,
@@ -362,7 +363,7 @@ router.post('/api/render/finals', async (req, res) => {
       // Get all assets for the full video
       const allAssetUrls = plan.selectedAssets.map((a) => a.url);
 
-      logger.info('Calling VEO3 for final video', {
+      logger.info('Calling Veo 3.0 for final video', {
         runId: run.id,
         variantId: variant.id,
         seed,
@@ -371,7 +372,7 @@ router.post('/api/render/finals', async (req, res) => {
         assetCount: allAssetUrls.length,
       });
 
-      // Step 3: Call VEO3 (full model) with audio and beat windows
+      // Step 3: Call Veo 3.0 (full model) with audio and beat windows
       try {
         // Update run to running state
         await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
@@ -381,10 +382,12 @@ router.post('/api/render/finals', async (req, res) => {
           referenceImages: allAssetUrls.map((url: string) => ({ url, type: 'asset' as const })),
           resolution: '720p',
           aspectRatio: '9:16',
+          model: VEO_MODELS.VEO3_FULL,
         });
 
-        logger.info('VEO3 final video generated successfully', {
+        logger.info('Veo 3.0 final video generated successfully', {
           runId: run.id,
+          model: VEO_MODELS.VEO3_FULL,
           videoUrl: veoResult.videoUrl,
         });
 
@@ -415,13 +418,13 @@ router.post('/api/render/finals', async (req, res) => {
 
         runs.push(run);
       } catch (veoError) {
-        logger.error('VEO3 API call failed for final', { runId: run.id, error: veoError });
+        logger.error('Veo 3.0 API call failed for final', { runId: run.id, error: veoError });
 
         await supabase
           .from('runs')
           .update({
             state: 'failed',
-            error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+            error: veoError instanceof Error ? veoError.message : 'Veo 3.0 API call failed',
           })
           .eq('id', run.id);
 
@@ -448,7 +451,7 @@ router.post('/api/render/finals', async (req, res) => {
       })),
       creditsCharged: requiredCredits,
       creditsRemaining: user.credits - requiredCredits,
-      message: `${runs.length} final renders initiated with TTS audio and VEO3`,
+      message: `${runs.length} final renders initiated with TTS audio and Veo 3.0`,
     });
   } catch (error) {
     logger.error('Final render error', { error });
@@ -474,11 +477,11 @@ router.post('/api/render/swap-hook', async (req, res) => {
       });
     }
 
-    // ⬅️ This endpoint calls VEO3 too; guard it.
+    // ⬅️ This endpoint calls Veo 3.0 too; guard it.
     if (!hasGoogle()) {
       return res.status(400).json({
         error:
-          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_VEO3_API_KEY) to enable hook swap previews.',
+          'Google (Gemini/Veo) key missing — set GOOGLE_API_KEY or GEMINI_API_KEY (or GOOGLE_Veo 3.0_API_KEY) to enable hook swap previews.',
       });
     }
 
@@ -575,9 +578,9 @@ router.post('/api/render/swap-hook', async (req, res) => {
       .from('runs')
       .insert({
         variant_id: variant.id,
-        engine: 'veo_fast',
+        engine: 'veo3_fast',
         state: 'queued',
-        veo_model: 'veo_fast',
+        veo_model: 'veo-3.0-fast-generate-001',
         beat_duration: 6,
         request_json: control,
         cost_seconds: 9,
@@ -601,7 +604,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
     const firstBeat = plan.beats[0];
     const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
 
-    logger.info('Calling VEO3 for hook swap', {
+    logger.info('Calling Veo 3.0 for hook swap', {
       runId: run.id,
       variantId,
       seed,
@@ -610,7 +613,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
       newHookLine,
     });
 
-    // Call VEO3 API
+    // Call Veo 3.0 API
     try {
       // Update run to running state
       await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
@@ -620,10 +623,12 @@ router.post('/api/render/swap-hook', async (req, res) => {
         referenceImages: referenceImages.map((url: string) => ({ url, type: 'asset' as const })),
         resolution: '720p',
         aspectRatio: '9:16',
+        model: VEO_MODELS.VEO3_FAST,
       });
 
-      logger.info('VEO3 hook swap video generated successfully', {
+      logger.info('Veo 3.0 hook swap video generated successfully', {
         runId: run.id,
+        model: VEO_MODELS.VEO3_FAST,
         videoUrl: veoResult.videoUrl,
       });
 
@@ -650,24 +655,24 @@ router.post('/api/render/swap-hook', async (req, res) => {
         runId: run.id,
         variantId,
         newHookLine,
-        message: 'Hook swap preview initiated with VEO3 Fast',
+        message: 'Hook swap preview initiated with Veo 3.0 Fast',
         creditsCharged: userId ? 1 : 0,
       });
     } catch (veoError) {
-      logger.error('VEO3 API call failed for hook swap', { runId: run.id, error: veoError });
+      logger.error('Veo 3.0 API call failed for hook swap', { runId: run.id, error: veoError });
 
       await supabase
         .from('runs')
         .update({
           state: 'failed',
-          error: veoError instanceof Error ? veoError.message : 'VEO3 API call failed',
+          error: veoError instanceof Error ? veoError.message : 'Veo 3.0 API call failed',
         })
         .eq('id', run.id);
 
       await supabase.from('variants').update({ status: 'error' }).eq('id', variant.id);
 
       return res.status(500).json({
-        error: 'VEO3 API call failed',
+        error: 'Veo 3.0 API call failed',
         details: veoError instanceof Error ? veoError.message : 'Unknown error',
       });
     }

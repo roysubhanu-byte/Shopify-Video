@@ -102,8 +102,8 @@ router.post('/webhooks/veo', async (req, res) => {
       }
 
       // Determine if this is a preview or final render
-      const isPreview = run.engine === 'veo_fast' && run.cost_seconds === 9;
-      const isFinal = run.engine === 'veo_3' || (run.engine === 'veo_fast' && run.cost_seconds >= 20);
+      const isPreview = run.engine === 'veo3_fast' && run.cost_seconds === 9;
+      const isFinal = run.engine === 'veo3_full' || (run.engine === 'veo3_fast' && run.cost_seconds >= 20);
 
       // Extract expected overlays from plan
       const allOverlays: Overlay[] = plan.beats.flatMap((beat) => beat.overlays);
