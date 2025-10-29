@@ -669,13 +669,23 @@ router.get('/api/render/status/:runId', async (req, res) => {
       progress = 100;
     }
 
+    // Format response to match frontend expectations
+    const variantData = run.variants ? {
+      variantId: run.variant_id,
+      status: run.state === 'succeeded' ? 'succeeded' : run.state === 'failed' ? 'failed' : 'processing',
+      videoUrl: run.variants.video_url,
+      error: run.error,
+    } : null;
+
     res.json({
+      status: run.state === 'succeeded' ? 'succeeded' : run.state === 'failed' ? 'failed' : 'processing',
       state: run.state,
       progress,
       videoUrl: run.variants?.video_url,
       error: run.error,
       estimatedTime,
       createdAt: run.created_at,
+      variants: variantData ? [variantData] : [],
     });
   } catch (error) {
     logger.error('Get render status error', { error });

@@ -444,9 +444,11 @@ export function CreatePage() {
       console.error('Error starting previews:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
 
-      // Check for API key errors
-      if (errorMessage.toLowerCase().includes('google') || errorMessage.toLowerCase().includes('gemini') || errorMessage.toLowerCase().includes('veo')) {
-        addToast('error', 'Video generation requires Google API keys. Please configure GOOGLE_API_KEY, GEMINI_API_KEY, or GOOGLE_VEO3_API_KEY in your API environment.');
+      // Check for specific error types
+      if (errorMessage.toLowerCase().includes('cors')) {
+        addToast('error', 'Network error: Unable to connect to API server. Please check your connection.');
+      } else if (errorMessage.toLowerCase().includes('google') || errorMessage.toLowerCase().includes('gemini') || errorMessage.toLowerCase().includes('veo') || errorMessage.toLowerCase().includes('api key')) {
+        addToast('error', 'Video generation service unavailable. Contact support if this persists.');
       } else {
         addToast('error', errorMessage);
       }

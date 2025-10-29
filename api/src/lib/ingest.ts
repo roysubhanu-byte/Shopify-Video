@@ -202,6 +202,12 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
             imgLower.includes('icon') ||
             imgLower.includes('favicon') ||
             imgLower.includes('badge') ||
+            imgLower.includes('placeholder') ||
+            imgLower.includes('sprite') ||
+            imgLower.endsWith('.svg') ||
+            imgLower.endsWith('.gif') ||
+            imgLower.match(/_small\.(jpg|jpeg|png|webp)/) ||
+            imgLower.match(/_thumb\.(jpg|jpeg|png|webp)/) ||
             imgLower.match(/_\d+x\d+\.(jpg|jpeg|png|webp)/) && !imgLower.match(/_\d{3,}x\d{3,}\.(jpg|jpeg|png|webp)/)) {
           continue;
         }
@@ -232,7 +238,14 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
               urlLower.includes('favicon') ||
               urlLower.includes('badge') ||
               urlLower.includes('avatar') ||
+              urlLower.includes('placeholder') ||
               urlLower.includes('thumbnail') ||
+              urlLower.includes('sprite') ||
+              urlLower.includes('blank') ||
+              urlLower.endsWith('.svg') ||
+              urlLower.endsWith('.gif') ||
+              urlLower.match(/_small\.(jpg|jpeg|png|webp)/) ||
+              urlLower.match(/_thumb\.(jpg|jpeg|png|webp)/) ||
               urlLower.match(/_\d+x\d+\.(jpg|jpeg|png|webp)/) && !urlLower.match(/_\d{3,}x\d{3,}\.(jpg|jpeg|png|webp)/)) {
             continue;
           }

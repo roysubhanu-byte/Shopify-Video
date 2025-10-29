@@ -54,9 +54,9 @@ export async function renderFinals(payload: { projectId: string; userId: string 
   return httpPost('/api/render/finals', payload);
 }
 
-/** GET /api/render/:runId/status -> { id, state, videoUrl?, error? } */
+/** GET /api/render/status/:runId -> { id, state, videoUrl?, error? } */
 export async function getJobStatus(runId: string) {
-  return httpGet(`/api/render/${encodeURIComponent(runId)}/status`);
+  return httpGet(`/api/render/status/${encodeURIComponent(runId)}`);
 }
 
 /** (optional) GET /api/hooks?vertical=general */

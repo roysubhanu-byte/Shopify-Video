@@ -220,12 +220,17 @@ function parseWebPDimensions(bytes: Uint8Array): { width: number; height: number
 function determineAssetType(url: string, width: number | null, height: number | null): ProductAsset['asset_type'] {
   const urlLower = url.toLowerCase();
 
-  // Skip logos and icons - mark as unknown so they can be filtered
+  // Skip logos, icons, and non-product images - mark as unknown so they can be filtered
   if (urlLower.includes('logo') ||
       urlLower.includes('icon') ||
       urlLower.includes('favicon') ||
       urlLower.includes('badge') ||
-      urlLower.includes('avatar')) {
+      urlLower.includes('avatar') ||
+      urlLower.includes('placeholder') ||
+      urlLower.includes('sprite') ||
+      urlLower.includes('blank') ||
+      urlLower.endsWith('.svg') ||
+      urlLower.endsWith('.gif')) {
     return 'unknown';
   }
 

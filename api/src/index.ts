@@ -41,6 +41,8 @@ const allowedOrigins: (string | RegExp)[] = [
   ...configured,
   // any Vercel preview/prod
   /^https:\/\/.+\.vercel\.app$/,
+  // Render.com origins (your backend)
+  /^https:\/\/.+\.onrender\.com$/,
   // local dev ports (Vite/SSR)
   'http://localhost:5173',
   'http://localhost:4173',

@@ -50,51 +50,35 @@ export class VEO3Client {
     });
 
     try {
-      // Build the request payload for Gemini API
+      // Build the request payload for VEO3 API
+      // Based on Google Imagen 3 video generation API format
       const payload: any = {
-        model: `models/${this.model}`,
-        contents: [
-          {
-            parts: [
-              {
-                text: request.prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          videoConfig: {
-            duration: request.duration,
-            aspectRatio: request.aspectRatio,
-            includeAudio: request.includeAudio,
-          },
+        prompt: request.prompt,
+        video: {
+          duration_sec: request.duration,
+          aspect_ratio: request.aspectRatio,
+          seed: Math.floor(Math.random() * 2147483647),
         },
       };
 
       // Add reference images if provided (Ingredients to Video)
       if (request.referenceImages && request.referenceImages.length > 0) {
-        payload.contents[0].parts.push(
-          ...request.referenceImages.map((imageUrl) => ({
-            fileData: {
-              fileUri: imageUrl,
-              mimeType: 'image/jpeg',
-            },
-          }))
-        );
+        payload.image_urls = request.referenceImages;
       }
 
       // Add previous video for scene extension
       if (request.previousVideoUrl) {
-        payload.contents[0].parts.push({
-          fileData: {
-            fileUri: request.previousVideoUrl,
-            mimeType: 'video/mp4',
-          },
-        });
+        payload.video.input_video_url = request.previousVideoUrl;
       }
 
+      // Add audio flag
+      if (request.includeAudio) {
+        payload.video.include_audio = true;
+      }
+
+      // Use the correct Imagen 3 video generation endpoint
       const response = await fetch(
-        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        `${this.baseUrl}/models/imagen-3.0-generate-001:predict?key=${this.apiKey}`,
         {
           method: 'POST',
           headers: {
@@ -116,19 +100,20 @@ export class VEO3Client {
       const data: any = await response.json();
 
       // Extract video URL from response
-      const videoUrl = data.candidates?.[0]?.content?.parts?.[0]?.fileData?.fileUri;
-      const thumbnailUrl = data.candidates?.[0]?.content?.parts?.[0]?.fileData?.thumbnailUri;
+      // Response format: { predictions: [{ video_url, ...}], metadata: {...} }
+      const videoUrl = data.predictions?.[0]?.video_url || data.video_url;
+      const jobId = data.metadata?.operation_id || data.name || `job_${Date.now()}`;
 
       logger.info('Video generated successfully', {
-        jobId: data.name,
+        jobId,
         hasVideoUrl: !!videoUrl,
+        responseKeys: Object.keys(data),
       });
 
       return {
-        jobId: data.name,
+        jobId,
         status: videoUrl ? 'completed' : 'processing',
         videoUrl,
-        thumbnailUrl,
         duration: request.duration,
       };
     } catch (error) {
