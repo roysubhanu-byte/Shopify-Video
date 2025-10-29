@@ -3,9 +3,9 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
 import { Plan } from '../types/plan';
-import { generateVideoWithVeo3 } from '../lib/veo3-service';
+import { generateVideoWithVeo3, startVideoGeneration, pollVideoGenerationAndSave } from '../lib/veo3-service';
 import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
-import { hasGoogle } from '../lib/google'; // ⬅️ NEW
+import { hasGoogle } from '../lib/google';
 
 const router = Router();
 const logger = new Logger({ module: 'render-route' });
@@ -127,45 +127,58 @@ router.post('/api/render/previews', async (req, res) => {
         referenceUrls: referenceImages.map(url => url.substring(0, 80)),
       });
 
-      // Call VEO3 API
+      // Call VEO3 API (async - start and poll in background)
       try {
         // Update run to running state
         await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
-        const veoResult = await generateVideoWithVeo3({
+        logger.info('[RENDER] Starting VEO3 video generation', {
+          runId: run.id,
+          variantId: variant.id,
+        });
+
+        // Start video generation and get operation ID
+        const operation = await startVideoGeneration({
           prompt: `${system}\n\n${user}`,
           referenceImages: referenceImages.map((url: string) => ({ url, type: 'asset' as const })),
           resolution: '720p',
           aspectRatio: '9:16',
         });
 
-        logger.info('[RENDER] VEO3 video generated successfully', {
+        logger.info('[RENDER] VEO3 operation started, polling in background', {
           runId: run.id,
-          videoUrl: veoResult.videoUrl,
-          duration: veoResult.duration,
+          operationName: operation.operationName,
         });
 
-        // Update run with video URL
+        // Store operation info in run
         await supabase
           .from('runs')
           .update({
-            state: 'succeeded',
-            response_json: { videoUrl: veoResult.videoUrl },
+            response_json: { operationName: operation.operationName },
           })
           .eq('id', run.id);
 
-        // Update variant with video URL
-        await supabase
-          .from('variants')
-          .update({
-            status: 'completed',
-            video_url: veoResult.videoUrl,
-          })
-          .eq('id', variant.id);
+        // Start background polling (don't await)
+        pollVideoGenerationAndSave(operation.operationName, run.id).catch((pollError) => {
+          logger.error('[RENDER] Background polling failed', {
+            runId: run.id,
+            error: pollError,
+          });
+
+          supabase
+            .from('runs')
+            .update({
+              state: 'failed',
+              error: pollError instanceof Error ? pollError.message : 'Video generation failed',
+            })
+            .eq('id', run.id);
+
+          supabase.from('variants').update({ status: 'error' }).eq('id', variant.id);
+        });
 
         runs.push(run);
       } catch (veoError) {
-        logger.error('VEO3 API call failed', { runId: run.id, error: veoError });
+        logger.error('[RENDER] VEO3 API call failed', { runId: run.id, error: veoError });
 
         await supabase
           .from('runs')

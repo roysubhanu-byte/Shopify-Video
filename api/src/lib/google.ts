@@ -2,8 +2,10 @@
 export function getGoogleApiKey(): string {
   return (
     process.env.GOOGLE_VEO3_API_KEY ||
+    process.env.GOOGLE_AI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     process.env.GEMINI_API_KEY ||
+    process.env.VEO_API_KEY ||
     ''
   );
 }
