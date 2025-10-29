@@ -473,7 +473,15 @@ export function CreatePage() {
         projectId: pid,
         userId: uid,
       });
-      setCurrentRunId(response.runId);
+
+      // Extract runId from response (API now includes it for convenience)
+      const runId = response.runId || response.runs?.[0]?.id;
+
+      if (!runId) {
+        throw new Error('No render job was created. Please try again.');
+      }
+
+      setCurrentRunId(runId);
     } catch (error) {
       console.error('Error starting previews:', error);
       const errorMessage = error instanceof Error ? error.message : i18n.messages.error;
