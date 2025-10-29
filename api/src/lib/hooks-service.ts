@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { Logger } from './logger';
 import { ProductData } from './ingest';
 import { BrandKit } from './brand-kit';
-import { extractHookVariables, fillHookTemplate, type HookVariables } from './veo3-prompt-builder';
+import { extractHookVariables, fillHookTemplate, type HookVariables } from './prompt-helpers';
 
 const logger = new Logger({ module: 'hooks-service' });
 

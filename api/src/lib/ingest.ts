@@ -193,7 +193,7 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
     }
 
     // Extract Shopify CDN images using simple match
-    if (images.length < 10) {
+    if (images.length < 20) {
       const shopifyMatches = html.match(/https?:\/\/cdn\.shopify\.com\/s\/files\/[^\s"'>]+/g) || [];
       for (const img of shopifyMatches) {
         // Skip logos, icons, and small images
@@ -215,12 +215,12 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
         if (!images.includes(img)) {
           images.push(img);
         }
-        if (images.length >= 15) break;
+        if (images.length >= 20) break;
       }
     }
 
     // Extract all img tags using match instead of matchAll
-    if (images.length < 10) {
+    if (images.length < 20) {
       const imgMatches = html.match(/<img[^>]+src=["']([^"']+)["']/gi) || [];
 
       for (const match of imgMatches) {
@@ -270,7 +270,7 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
             images.push(imageUrl);
           }
 
-          if (images.length >= 15) break;
+          if (images.length >= 20) break;
         } catch (e) {
           continue;
         }
@@ -281,7 +281,7 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
     images = images
       .filter(img => img && img.startsWith('http'))
       .filter((img, index, self) => self.indexOf(img) === index)
-      .slice(0, 10);
+      .slice(0, 20);
 
     logger.info('Image extraction complete', {
       url,
@@ -313,7 +313,7 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
     bullets,
     price: price > 0 ? price : undefined,
     currency,
-    images: images.slice(0, 5),
+    images: images.slice(0, 20),
     brandName,
     brandColors,
     reviews,

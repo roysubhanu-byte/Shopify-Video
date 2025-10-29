@@ -13,7 +13,7 @@ import {
 } from '../types/plan';
 import { getRecommendedHooks } from '../lib/hooks-service';
 import { getProductAssets, getSelectedAssets } from '../lib/asset-analyzer';
-import { buildConceptPrompts, extractHookVariables } from '../lib/veo3-prompt-builder';
+import { buildConceptPrompts, extractHookVariables } from '../lib/prompt-helpers';
 import { compileManualPrompt, validateManualPrompt } from '../lib/manual-prompt-compiler';
 
 const router = Router();

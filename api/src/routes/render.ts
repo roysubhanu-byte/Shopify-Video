@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Logger } from '../lib/logger';
 import { compilePreviewPrompt, compileFinalPrompt, validateCompiledPrompt } from '../lib/promptCompiler';
 import { Plan } from '../types/plan';
-import { createVEO3Client } from '../lib/veo3-client';
+import { generateVideoWithVeo3 } from '../lib/veo3-service';
 import { generateTTSForBeats, validateTTSResult } from '../lib/tts-service';
 import { hasGoogle } from '../lib/google'; // ⬅️ NEW
 
@@ -47,7 +47,6 @@ router.post('/api/render/previews', async (req, res) => {
     }
 
     const runs: any[] = [];
-    const veo3Client = createVEO3Client('veo_fast');
 
     for (const variant of variants) {
       if (!variant.script_json) {
@@ -109,37 +108,42 @@ router.post('/api/render/previews', async (req, res) => {
         imageCount: referenceImages.length,
       });
 
-      // Call VEO3 Fast API
+      // Call VEO3 API
       try {
         // Update run to running state
         await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
-        const veoResult = await veo3Client.generateVideo({
+        const veoResult = await generateVideoWithVeo3({
           prompt: `${system}\n\n${user}`,
-          duration: 9,
+          referenceImages: referenceImages.map((url: string) => ({ url, type: 'asset' as const })),
+          resolution: '720p',
           aspectRatio: '9:16',
-          referenceImages,
-          includeAudio: false,
         });
 
-        logger.info('VEO3 Fast called successfully', {
+        logger.info('VEO3 video generated successfully', {
           runId: run.id,
-          jobId: veoResult.jobId,
-          status: veoResult.status,
+          videoUrl: veoResult.videoUrl,
         });
 
-        // Store VEO3 job ID
+        // Update run with video URL
         await supabase
           .from('runs')
           .update({
-            response_json: { veoJobId: veoResult.jobId, webhookUrl },
+            state: 'succeeded',
+            response_json: { videoUrl: veoResult.videoUrl },
           })
           .eq('id', run.id);
 
-        runs.push(run);
+        // Update variant with video URL
+        await supabase
+          .from('variants')
+          .update({
+            status: 'completed',
+            video_url: veoResult.videoUrl,
+          })
+          .eq('id', variant.id);
 
-        // Update variant status
-        await supabase.from('variants').update({ status: 'previewing' }).eq('id', variant.id);
+        runs.push(run);
       } catch (veoError) {
         logger.error('VEO3 API call failed', { runId: run.id, error: veoError });
 
@@ -234,7 +238,6 @@ router.post('/api/render/finals', async (req, res) => {
     }
 
     const runs: any[] = [];
-    const veo3Client = createVEO3Client('veo_fast');
 
     for (const variant of variants) {
       if (!variant.script_json) {
@@ -340,27 +343,25 @@ router.post('/api/render/finals', async (req, res) => {
         // Update run to running state
         await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
-        const veoResult = await veo3Client.generateVideo({
+        const veoResult = await generateVideoWithVeo3({
           prompt: `${system}\n\n${user}`,
-          duration: plan.targetDuration, // 20-24s for final
+          referenceImages: allAssetUrls.map((url: string) => ({ url, type: 'asset' as const })),
+          resolution: '720p',
           aspectRatio: '9:16',
-          referenceImages: allAssetUrls,
-          includeAudio: true,
         });
 
-        logger.info('VEO3 called successfully for final', {
+        logger.info('VEO3 final video generated successfully', {
           runId: run.id,
-          jobId: veoResult.jobId,
-          status: veoResult.status,
+          videoUrl: veoResult.videoUrl,
         });
 
-        // Update with VEO3 job ID
+        // Update run with video URL
         await supabase
           .from('runs')
           .update({
+            state: 'succeeded',
             response_json: {
-              veoJobId: veoResult.jobId,
-              webhookUrl,
+              videoUrl: veoResult.videoUrl,
               ttsResult: {
                 audioUrl: ttsResult.audioUrl,
                 wordTimestamps: ttsResult.allWordTimestamps,
@@ -370,10 +371,16 @@ router.post('/api/render/finals', async (req, res) => {
           })
           .eq('id', run.id);
 
-        runs.push(run);
+        // Update variant with video URL
+        await supabase
+          .from('variants')
+          .update({
+            status: 'completed',
+            video_url: veoResult.videoUrl,
+          })
+          .eq('id', variant.id);
 
-        // Update variant status
-        await supabase.from('variants').update({ status: 'finalizing' }).eq('id', variant.id);
+        runs.push(run);
       } catch (veoError) {
         logger.error('VEO3 API call failed for final', { runId: run.id, error: veoError });
 
@@ -561,7 +568,7 @@ router.post('/api/render/swap-hook', async (req, res) => {
     const firstBeat = plan.beats[0];
     const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
 
-    logger.info('Calling VEO3 Fast for hook swap', {
+    logger.info('Calling VEO3 for hook swap', {
       runId: run.id,
       variantId,
       seed,
@@ -570,37 +577,40 @@ router.post('/api/render/swap-hook', async (req, res) => {
       newHookLine,
     });
 
-    // Call VEO3 Fast API
-    const veo3Client = createVEO3Client('veo_fast');
-
+    // Call VEO3 API
     try {
       // Update run to running state
       await supabase.from('runs').update({ state: 'running' }).eq('id', run.id);
 
-      const veoResult = await veo3Client.generateVideo({
+      const veoResult = await generateVideoWithVeo3({
         prompt: `${system}\n\n${user}`,
-        duration: 9,
+        referenceImages: referenceImages.map((url: string) => ({ url, type: 'asset' as const })),
+        resolution: '720p',
         aspectRatio: '9:16',
-        referenceImages,
-        includeAudio: false,
       });
 
-      logger.info('VEO3 Fast called successfully for hook swap', {
+      logger.info('VEO3 hook swap video generated successfully', {
         runId: run.id,
-        jobId: veoResult.jobId,
-        status: veoResult.status,
+        videoUrl: veoResult.videoUrl,
       });
 
-      // Store VEO3 job ID
+      // Update run with video URL
       await supabase
         .from('runs')
         .update({
-          response_json: { veoJobId: veoResult.jobId, webhookUrl, hookSwap: true },
+          state: 'succeeded',
+          response_json: { videoUrl: veoResult.videoUrl, hookSwap: true },
         })
         .eq('id', run.id);
 
-      // Update variant status
-      await supabase.from('variants').update({ status: 'previewing' }).eq('id', variant.id);
+      // Update variant with video URL
+      await supabase
+        .from('variants')
+        .update({
+          status: 'completed',
+          video_url: veoResult.videoUrl,
+        })
+        .eq('id', variant.id);
 
       res.json({
         success: true,
