@@ -25,6 +25,12 @@ const logger = new Logger({ module: 'plan-route' });
  */
 router.post('/api/plan', async (req, res) => {
   try {
+    logger.info('[PLAN] Request received', {
+      projectId: req.body.projectId,
+      userId: req.body.userId,
+      creationMode: req.body.creationMode,
+    });
+
     const {
       projectId,
       userId,
@@ -40,6 +46,7 @@ router.post('/api/plan', async (req, res) => {
     } = req.body;
 
     if (!projectId || !userId) {
+      logger.error('[PLAN] Missing required fields', { projectId, userId });
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['projectId', 'userId'],
@@ -76,9 +83,18 @@ router.post('/api/plan', async (req, res) => {
       .maybeSingle();
 
     if (projectError || !project) {
-      logger.error('Project not found', { projectId, error: projectError });
-      return res.status(404).json({ error: 'Project not found' });
+      logger.error('[PLAN] Project not found', { projectId, userId, error: projectError });
+      return res.status(404).json({
+        error: 'Project not found',
+        details: projectError?.message || 'No project with this ID',
+      });
     }
+
+    logger.info('[PLAN] Project found', {
+      projectId,
+      productId: project.product_id,
+      brandKitId: project.brand_kit_id,
+    });
 
     // Fetch linked product and brand kit
     const { data: product, error: productError } = await supabase
@@ -94,20 +110,37 @@ router.post('/api/plan', async (req, res) => {
       .maybeSingle();
 
     if (!product || !brandKit) {
-      logger.error('Project missing product or brand kit', {
+      logger.error('[PLAN] Project missing product or brand kit', {
         projectId,
         hasProduct: !!product,
         hasBrandKit: !!brandKit,
-        productError,
-        brandKitError,
+        productError: productError?.message,
+        brandKitError: brandKitError?.message,
+        productId: project.product_id,
+        brandKitId: project.brand_kit_id,
       });
       return res.status(400).json({
         error: 'Project missing product or brand kit data',
+        details: {
+          hasProduct: !!product,
+          hasBrandKit: !!brandKit,
+          productError: productError?.message,
+          brandKitError: brandKitError?.message,
+        },
       });
     }
 
+    logger.info('[PLAN] Product and brand kit loaded', {
+      productId: product.id,
+      productTitle: product.title,
+      brandKitId: brandKit.id,
+      brandName: brandKit.brand_name,
+    });
+
     // Get selected assets
+    logger.info('[PLAN] Fetching selected assets', { productId: product.id });
     let selectedAssets = await getSelectedAssets(product.id);
+    logger.info('[PLAN] Initial selected assets', { count: selectedAssets.length });
 
     // If no assets selected, try to auto-select the best ones
     if (selectedAssets.length === 0) {
@@ -138,14 +171,15 @@ router.post('/api/plan', async (req, res) => {
     }
 
     // Log the final asset count for debugging
-    logger.info('Final asset check', {
+    logger.info('[PLAN] Final asset check', {
       productId: product.id,
       selectedCount: selectedAssets.length,
       assetIds: selectedAssets.map(a => a.id),
+      assetUrls: selectedAssets.map(a => a.asset_url.substring(0, 80)),
     });
 
     if (selectedAssets.length < 3) {
-      logger.error('Insufficient assets for plan generation', {
+      logger.error('[PLAN] Insufficient assets for plan generation', {
         productId: product.id,
         selectedCount: selectedAssets.length,
         projectId,
@@ -154,6 +188,12 @@ router.post('/api/plan', async (req, res) => {
       // Check if we have assets at all
       const allAssets = await getProductAssets(product.id);
       const totalAvailable = allAssets.length;
+
+      logger.error('[PLAN] Asset availability', {
+        selectedCount: selectedAssets.length,
+        totalAvailable,
+        productId: product.id,
+      });
 
       return res.status(400).json({
         error: 'At least 3 assets must be selected before generating plans',
@@ -184,7 +224,11 @@ router.post('/api/plan', async (req, res) => {
     const plans: Plan[] = [];
     const variantUpdates: Array<{ variantId: string; plan: Plan }> = [];
 
-    for (let i = 0; i < 3; i++) {
+    // Generate only Concept A for now (to test single video generation)
+    const conceptCount = 1; // Changed from 3 to 1
+    logger.info('[PLAN] Generating concepts', { count: conceptCount });
+
+    for (let i = 0; i < conceptCount; i++) {
       const conceptType = conceptTypes[i];
       const conceptLabel = conceptLabels[i];
       const seed = seeds[i];
@@ -333,10 +377,16 @@ router.post('/api/plan', async (req, res) => {
       })),
     });
   } catch (error) {
-    logger.error('Plan generation error', { error });
+    logger.error('[PLAN] Plan generation error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      projectId: req.body.projectId,
+      userId: req.body.userId,
+    });
     res.status(500).json({
       error: 'Failed to generate plans',
       details: error instanceof Error ? error.message : 'Unknown error',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
     });
   }
 });

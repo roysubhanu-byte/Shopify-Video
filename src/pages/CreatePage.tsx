@@ -234,20 +234,40 @@ export function CreatePage() {
         return;
       }
 
+      // Wait a moment for database consistency
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Verify assets were saved by re-fetching
       const { data: verifyAssets, error: verifyError } = await supabase
         .from('product_assets')
-        .select('id')
+        .select('id, asset_url, display_order')
         .eq('product_id', project.product_id)
-        .eq('is_selected', true);
+        .eq('is_selected', true)
+        .order('display_order', { ascending: true });
+
+      console.log('[CreatePage] Asset verification result:', {
+        verifyError,
+        count: verifyAssets?.length,
+        expectedCount: selectedAssets.length,
+        assetIds: verifyAssets?.map(a => a.id),
+        productId: project.product_id,
+      });
 
       if (verifyError || !verifyAssets || verifyAssets.length < 3) {
-        console.error('Asset verification failed:', verifyError, 'count:', verifyAssets?.length);
-        addToast('error', 'Asset selection verification failed. Please try again.');
+        console.error('[CreatePage] Asset verification failed:', {
+          verifyError,
+          count: verifyAssets?.length,
+          expected: selectedAssets.length,
+          productId: project.product_id,
+        });
+        addToast('error', `Asset verification failed. Found ${verifyAssets?.length || 0} of ${selectedAssets.length} assets. Please try again.`);
         return;
       }
 
-      console.log('[CreatePage] Assets saved and verified:', verifyAssets.length);
+      console.log('[CreatePage] Assets saved and verified successfully:', {
+        count: verifyAssets.length,
+        assetIds: verifyAssets.map(a => a.id),
+      });
       addToast('success', `${selectedAssets.length} images selected and saved`);
       setCurrentStep('storyboard');
     } catch (error) {
@@ -402,17 +422,31 @@ export function CreatePage() {
       console.error('[Create] plan error:', error);
       const errorMessage = error?.message || i18n.messages.error;
 
+      // Log full error details for debugging
+      console.error('[Create] Full error details:', {
+        message: error?.message,
+        response: error?.response,
+        stack: error?.stack,
+      });
+
       // Check if this is an asset selection error
-      if (errorMessage.includes('3 assets') || errorMessage.includes('images')) {
-        addToast('error', 'Asset selection issue detected. Redirecting to asset selection...');
+      if (errorMessage.includes('3 assets') || errorMessage.includes('images') || errorMessage.includes('select')) {
+        addToast('error', `Asset Selection Error: ${errorMessage}`);
         if (availableAssets.length >= 3) {
+          console.log('[Create] Redirecting to asset-selection step');
           setCurrentStep('asset-selection');
         } else {
           addToast('info', 'Not enough images available to proceed');
           setCurrentStep(creationMode === 'automated' ? 'hooks' : 'creation-mode');
         }
+      } else if (errorMessage.includes('Google') || errorMessage.includes('API key') || errorMessage.includes('VEO')) {
+        addToast('error', 'Video generation service unavailable. Please contact support.');
+      } else if (errorMessage.includes('Project') || errorMessage.includes('product') || errorMessage.includes('brand kit')) {
+        addToast('error', `Setup Error: ${errorMessage}. Please start over.`);
+        setCurrentStep('url');
       } else {
-        addToast('error', errorMessage);
+        // Show the actual error message from the API
+        addToast('error', `Error: ${errorMessage}`);
         setCurrentStep(creationMode === 'automated' ? 'hooks' : 'creation-mode');
       }
     } finally {
@@ -739,7 +773,7 @@ export function CreatePage() {
                 disabled={isPlanning}
                 className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
               >
-                {isPlanning ? 'Generating Plans…' : <>Generate 3 Concepts <ArrowRight size={20} /></>}
+                {isPlanning ? 'Generating Plan…' : <>Generate Concept <ArrowRight size={20} /></>}
               </button>
             </div>
           </div>
@@ -749,16 +783,16 @@ export function CreatePage() {
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
                 <p className="text-slate-400">
-                  {creationMode === 'manual' ? 'Creating your custom video concept…' : 'Generating 3 concepts…'}
+                  {creationMode === 'manual' ? 'Creating your custom video concept…' : 'Generating your video concept…'}
                 </p>
               </div>
             ) : (
               <>
                 <div className="mb-8">
                   <h2 className="text-3xl font-bold text-white mb-2">
-                    {creationMode === 'manual' ? 'Your Video Concept' : 'Your 3 Video Concepts'}
+                    Your Video Concept
                   </h2>
-                  <p className="text-slate-400">Choose between video previews or instant static images</p>
+                  <p className="text-slate-400">Review your concept and generate video preview</p>
                 </div>
                 <ModeTabs
                   conceptsData={conceptsData}
@@ -773,7 +807,7 @@ export function CreatePage() {
                       disabled={isRendering}
                       className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors flex items-center gap-3 text-lg"
                     >
-                      {isRendering ? i18n.messages.rendering : <>{i18n.cta.create3} <ArrowRight size={20} /></>}
+                      {isRendering ? i18n.messages.rendering : <>Generate Video Preview <ArrowRight size={20} /></>}
                     </button>
                   </div>
                 )}

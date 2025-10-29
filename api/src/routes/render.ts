@@ -33,18 +33,22 @@ router.post('/api/render/previews', async (req, res) => {
       });
     }
 
-    logger.info('Starting preview renders', { projectId, userId });
+    logger.info('[RENDER] Starting preview renders', { projectId, userId });
 
-    // Get all variants with plans
+    // Get all variants with plans - but only process Concept A for now
     const { data: variants, error: variantsError } = await supabase
       .from('variants')
       .select('*')
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .eq('concept_tag', 'A') // Only get Concept A
+      .limit(1); // Only one video
 
     if (variantsError || !variants || variants.length === 0) {
-      logger.error('No variants found', { projectId, error: variantsError });
+      logger.error('[RENDER] No variants found', { projectId, error: variantsError });
       return res.status(404).json({ error: 'No variants found for project' });
     }
+
+    logger.info('[RENDER] Processing variants', { count: variants.length, conceptTags: variants.map(v => v.concept_tag) });
 
     const runs: any[] = [];
 
@@ -56,13 +60,25 @@ router.post('/api/render/previews', async (req, res) => {
 
       const plan = variant.script_json as Plan;
 
+      logger.info('[RENDER] Processing variant', {
+        variantId: variant.id,
+        conceptTag: variant.concept_tag,
+        conceptType: plan.conceptType,
+      });
+
       // Compile prompt
       const { system, user, control } = compilePreviewPrompt(plan);
+
+      logger.info('[RENDER] Prompt compiled', {
+        variantId: variant.id,
+        systemLength: system.length,
+        userLength: user.length,
+      });
 
       // Validate compiled prompt
       const validation = validateCompiledPrompt({ system, user, control });
       if (!validation.valid) {
-        logger.error('Compiled prompt validation failed', {
+        logger.error('[RENDER] Compiled prompt validation failed', {
           variantId: variant.id,
           errors: validation.errors,
         });
@@ -85,9 +101,11 @@ router.post('/api/render/previews', async (req, res) => {
         .maybeSingle();
 
       if (runError || !run) {
-        logger.error('Failed to create run', { variantId: variant.id, error: runError });
+        logger.error('[RENDER] Failed to create run', { variantId: variant.id, error: runError });
         continue;
       }
+
+      logger.info('[RENDER] Run record created', { runId: run.id, variantId: variant.id });
 
       // Build webhook URL with runId
       const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 8787}`;
@@ -100,12 +118,13 @@ router.post('/api/render/previews', async (req, res) => {
       const firstBeat = plan.beats[0];
       const referenceImages = firstBeat?.assetRefs.map((a) => a.url) || [];
 
-      logger.info('Calling VEO3 Fast', {
+      logger.info('[RENDER] Calling VEO3 Fast', {
         runId: run.id,
         variantId: variant.id,
         seed,
         webhookUrl,
         imageCount: referenceImages.length,
+        referenceUrls: referenceImages.map(url => url.substring(0, 80)),
       });
 
       // Call VEO3 API
@@ -120,9 +139,10 @@ router.post('/api/render/previews', async (req, res) => {
           aspectRatio: '9:16',
         });
 
-        logger.info('VEO3 video generated successfully', {
+        logger.info('[RENDER] VEO3 video generated successfully', {
           runId: run.id,
           videoUrl: veoResult.videoUrl,
+          duration: veoResult.duration,
         });
 
         // Update run with video URL

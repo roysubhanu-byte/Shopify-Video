@@ -2,6 +2,14 @@ import { Logger } from './logger';
 
 const logger = new Logger({ module: 'ingest' });
 
+/**
+ * Force HTTPS on URLs to prevent mixed content errors
+ */
+function forceHttps(url: string): string {
+  if (!url) return url;
+  return url.replace(/^http:\/\//i, 'https://');
+}
+
 export interface ProductData {
   url: string;
   title: string;
@@ -277,9 +285,10 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
       }
     }
 
-    // Clean and deduplicate images
+    // Clean and deduplicate images, force HTTPS to prevent mixed content errors
     images = images
       .filter(img => img && img.startsWith('http'))
+      .map(img => forceHttps(img)) // Force HTTPS on all image URLs
       .filter((img, index, self) => self.indexOf(img) === index)
       .slice(0, 20);
 
@@ -287,6 +296,7 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
       url,
       extractedCount: images.length,
       sampleImages: images.slice(0, 3).map(i => i.substring(0, 80)),
+      httpsCount: images.filter(img => img.startsWith('https://')).length,
     });
   } catch (error) {
     logger.error('Error during image extraction', { error, url });
