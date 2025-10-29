@@ -176,13 +176,91 @@ export async function ingestProductURL(url: string): Promise<ProductData> {
     'USD';
 
   let images: string[] = shopifyData?.images || [];
+
+  // Try JSON-LD structured data
   if (images.length === 0 && jsonld?.image) {
     images = Array.isArray(jsonld.image) ? jsonld.image : [jsonld.image];
   }
+
+  // Try Open Graph images
   if (images.length === 0) {
     const ogImage = extractMeta(html, 'og:image');
     if (ogImage) images.push(ogImage);
+
+    // Look for additional OG images
+    const ogImageMatches = html.matchAll(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/gi);
+    for (const match of ogImageMatches) {
+      if (match[1] && !images.includes(match[1])) {
+        images.push(match[1]);
+      }
+    }
   }
+
+  // Aggressively extract images from common product image patterns
+  if (images.length < 5) {
+    const imagePatterns = [
+      // Shopify CDN
+      /https?:\/\/cdn\.shopify\.com\/s\/files\/[^\s"'>]+/g,
+      // Generic product images
+      /<img[^>]*src=["']([^"']+)["'][^>]*(?:class=["'][^"']*product[^"']*["']|alt=[^>]*product)/gi,
+      /<img[^>]*(?:class=["'][^"']*product[^"']*["']|alt=[^>]*product)[^>]*src=["']([^"']+)["']/gi,
+      // Gallery images
+      /<img[^>]*src=["']([^"']+)["'][^>]*(?:class=["'][^"']*gallery[^"']*["'])/gi,
+      // High-res images
+      /<img[^>]*src=["']([^"']+)["'][^>]*(?:width=["'][5-9]\d{2,}|height=["'][5-9]\d{2,})/gi,
+      // Data attributes commonly used for lazy loading
+      /data-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi,
+      /data-image=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi,
+    ];
+
+    const extractedImages = new Set(images);
+
+    for (const pattern of imagePatterns) {
+      const matches = html.matchAll(pattern);
+      for (const match of matches) {
+        let imageUrl = match[1];
+
+        // Skip if it's not a valid image URL
+        if (!imageUrl || imageUrl.includes('logo') || imageUrl.includes('icon') || imageUrl.includes('sprite')) {
+          continue;
+        }
+
+        // Convert relative URLs to absolute
+        try {
+          if (imageUrl.startsWith('//')) {
+            imageUrl = 'https:' + imageUrl;
+          } else if (imageUrl.startsWith('/')) {
+            const baseUrl = new URL(url);
+            imageUrl = `${baseUrl.protocol}//${baseUrl.host}${imageUrl}`;
+          }
+
+          // Only add URLs that look like valid image URLs
+          if (imageUrl.match(/\.(jpg|jpeg|png|webp)(\?|$)/i)) {
+            extractedImages.add(imageUrl);
+          }
+
+          if (extractedImages.size >= 10) break;
+        } catch (e) {
+          continue;
+        }
+      }
+      if (extractedImages.size >= 10) break;
+    }
+
+    images = Array.from(extractedImages);
+  }
+
+  // Clean and deduplicate images
+  images = images
+    .filter(img => img && img.startsWith('http'))
+    .filter((img, index, self) => self.indexOf(img) === index)
+    .slice(0, 10);
+
+  logger.info('Image extraction complete', {
+    url,
+    extractedCount: images.length,
+    images: images.map(i => i.substring(0, 80)),
+  });
 
   const bullets = extractBullets(html);
   const brandName = extractBrandName(url, html);
@@ -224,7 +302,8 @@ export function validateProductData(data: ProductData): { valid: boolean; missin
 
   if (!data.title || data.title.length < 5) missing.push('title');
   if (data.bullets.length === 0) missing.push('features/bullets');
-  if (data.images.length === 0) missing.push('images');
+  // Don't require images - allow proceeding without them
+  // if (data.images.length === 0) missing.push('images');
   if (!data.brandName) missing.push('brand name');
 
   return {
