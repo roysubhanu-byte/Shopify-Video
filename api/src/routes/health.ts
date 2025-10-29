@@ -1,5 +1,7 @@
 // api/src/routes/health.ts
 import type { Request, Response } from 'express';
+import { validateGoogleApiKey, getGoogleKeySource } from '../lib/google';
+import { supabase } from '../lib/supabase';
 
 type Check = { name: string; ok: boolean; info?: string };
 
@@ -19,7 +21,8 @@ function googleKey(): string | undefined {
   );
 }
 
-export function healthHandler(_req: Request, res: Response) {
+export async function healthHandler(_req: Request, res: Response) {
+  const startTime = Date.now();
   const checks: Check[] = [];
 
   // Required
@@ -35,17 +38,49 @@ export function healthHandler(_req: Request, res: Response) {
   checks.push({ name: 'GEMINI_API_KEY', ok: has(process.env.GEMINI_API_KEY) });
   checks.push({ name: 'ELEVENLABS_API_KEY', ok: has(process.env.ELEVENLABS_API_KEY) });
 
+  // Validate Google API key if present
+  const googleValidation = validateGoogleApiKey();
+  const googleSource = getGoogleKeySource();
+
+  // Test Supabase connection
+  let supabaseConnected = false;
+  let supabaseError = null;
+  try {
+    const { error } = await supabase.from('users').select('id').limit(1);
+    supabaseConnected = !error;
+    supabaseError = error?.message;
+  } catch (err) {
+    supabaseError = err instanceof Error ? err.message : 'Connection failed';
+  }
+
   // Overall ok = all required are true
   const requiredOk = checks
     .filter((c) => ['APP_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'OPENAI_API_KEY', 'NODE_ENV'].includes(c.name))
     .every((c) => c.ok);
 
+  const responseTime = Date.now() - startTime;
+
   res.json({
     ok: requiredOk,
+    status: requiredOk ? (supabaseConnected && googleValidation.valid ? 'healthy' : 'degraded') : 'error',
     time: new Date().toISOString(),
+    responseTime: `${responseTime}ms`,
+    uptime: Math.floor(process.uptime()),
+    services: {
+      api: 'ok',
+      supabase: {
+        connected: supabaseConnected,
+        error: supabaseError,
+      },
+      google: {
+        configured: googleValidation.valid,
+        source: googleSource,
+        error: googleValidation.error,
+      },
+    },
     flags: {
       openai: has(process.env.OPENAI_API_KEY),
-      google: !!googleKey(),
+      google: googleValidation.valid,
       tts: has(process.env.ELEVENLABS_API_KEY),
     },
     checks,

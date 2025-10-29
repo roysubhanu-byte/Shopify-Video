@@ -35,44 +35,111 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
     setLoading(true);
     setError(null);
 
-    try {
-      // Build absolute URL against the API origin
-      const url =
-        `${API_URL}/api/products?shopUrl=${encodeURIComponent(shopUrl)}` +
-        (query ? `&q=${encodeURIComponent(query)}` : '');
+    const maxRetries = 3;
+    const timeoutMs = 15000;
 
-      const response = await fetch(url, { credentials: 'include' });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Build absolute URL against the API origin
+        const url =
+          `${API_URL}/api/products?shopUrl=${encodeURIComponent(shopUrl)}` +
+          (query ? `&q=${encodeURIComponent(query)}` : '');
 
-      // Handle HTTP errors
-      if (!response.ok) {
-        let message = 'Failed to fetch products';
+        console.log(`[ProductPicker] Fetching products (attempt ${attempt}/${maxRetries})`, { url });
+
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
-          const j = await response.json();
-          message = j?.error || j?.message || message;
-        } catch { /* ignore */ }
-        throw new Error(message);
+          const response = await fetch(url, {
+            credentials: 'include',
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          // Handle HTTP errors
+          if (!response.ok) {
+            let message = 'Failed to fetch products';
+            try {
+              const j = await response.json();
+              message = j?.error || j?.message || message;
+            } catch { /* ignore */ }
+
+            // Add specific error messages based on status code
+            if (response.status === 404) {
+              throw new Error('Product catalog not found. Please check the store URL.');
+            } else if (response.status === 403) {
+              throw new Error('Access denied to product catalog. The store may be private.');
+            } else if (response.status === 500) {
+              throw new Error('Server error while fetching products. Please try again.');
+            } else if (response.status === 0) {
+              throw new Error('Unable to connect to API. Check your internet connection.');
+            }
+
+            throw new Error(message);
+          }
+
+          const data = await response.json();
+
+          // API returns { success, isShopify, count, items: [...] }
+          const items = Array.isArray(data?.items) ? data.items : [];
+
+          console.log(`[ProductPicker] Products fetched successfully`, { count: items.length });
+
+          // normalize just in case (price can be number, images can be empty)
+          const normalized: Product[] = items.map((p: any) => ({
+            id: p.id ?? p.handle ?? crypto.randomUUID(),
+            handle: p.handle ?? '',
+            title: p.title ?? 'Untitled Product',
+            price: typeof p.price === 'number' ? p.price.toFixed(2) : String(p.price ?? '0.00'),
+            images: Array.isArray(p.images) ? p.images : [],
+          }));
+
+          setProducts(normalized);
+          setLoading(false);
+          return;
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+
+          if (fetchError.name === 'AbortError') {
+            throw new Error(`Request timed out after ${timeoutMs / 1000} seconds. The store may be slow to respond.`);
+          }
+
+          throw fetchError;
+        }
+      } catch (err) {
+        console.error(`[ProductPicker] Fetch attempt ${attempt} failed:`, err);
+
+        // If this is the last attempt, show the error
+        if (attempt === maxRetries) {
+          setProducts([]);
+
+          let errorMessage = 'Failed to load products.';
+
+          if (err instanceof Error) {
+            if (err.message.includes('CORS')) {
+              errorMessage = 'Unable to connect to API server. CORS policy blocked the request. Please contact support.';
+            } else if (err.message.includes('timeout') || err.message.includes('timed out')) {
+              errorMessage = 'Request timed out. The product catalog is taking too long to respond. Please try again or use a different store URL.';
+            } else if (err.message.includes('network') || err.message.includes('Failed to fetch')) {
+              errorMessage = 'Network error. Please check your internet connection and try again.';
+            } else {
+              errorMessage = err.message;
+            }
+          }
+
+          setError(errorMessage);
+          setLoading(false);
+          return;
+        }
+
+        // Wait before retrying (exponential backoff)
+        const delayMs = attempt === 1 ? 1000 : attempt === 2 ? 3000 : 5000;
+        console.log(`[ProductPicker] Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
-
-      const data = await response.json();
-
-      // API returns { success, isShopify, count, items: [...] }
-      const items = Array.isArray(data?.items) ? data.items : [];
-
-      // normalize just in case (price can be number, images can be empty)
-      const normalized: Product[] = items.map((p: any) => ({
-        id: p.id ?? p.handle ?? crypto.randomUUID(),
-        handle: p.handle ?? '',
-        title: p.title ?? 'Untitled Product',
-        price: typeof p.price === 'number' ? p.price.toFixed(2) : String(p.price ?? '0.00'),
-        images: Array.isArray(p.images) ? p.images : [],
-      }));
-
-      setProducts(normalized);
-    } catch (err) {
-      setProducts([]);
-      setError(err instanceof Error ? err.message : 'Failed to load products.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -123,8 +190,10 @@ export function ProductPickerModal({ open, shopUrl, onClose, onSelect }: Product
 
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
           {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3" />
+              <p className="text-slate-400 text-sm">Loading products...</p>
+              <p className="text-slate-500 text-xs mt-1">This may take a few seconds</p>
             </div>
           )}
 
