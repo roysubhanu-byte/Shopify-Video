@@ -46,9 +46,11 @@ const allowedOrigins: (string | RegExp)[] = [
   // local dev ports (Vite/SSR)
   'http://localhost:5173',
   'http://localhost:4173',
-  // WebContainer (StackBlitz, bolt.new) origins
-  /^https:\/\/.+\.local-credentialless\.webcontainer\.api\.io$/,
-  /^https:\/\/.+\.webcontainer\.io$/,
+  // WebContainer (StackBlitz, bolt.new) origins - including malformed URLs
+  /^https:\/\/[^/]+\.local-credentialless\.webcontainer-api\.io$/,
+  /^https:\/\/[^/]+\.local-credentialless\.webcontainer\.api\.io$/,
+  /^https:\/\/[^/]+\.webcontainer\.io$/,
+  /^https:\/\/[^/]+\.webcontainer-api\.io$/,
 ];
 
 app.use(
