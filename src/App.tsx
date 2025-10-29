@@ -5,10 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { SignInPage } from './pages/SignInPage';
 import { SignUpPage } from './pages/SignUpPage';
-// ⬇️ Import the *default* export (no braces)
-// ✅ correct (named export)
 import { CreatePage } from './pages/CreatePage';
-
 import { PromptPage } from './pages/PromptPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { BillingPage } from './pages/BillingPage';
@@ -16,6 +13,7 @@ import { PricingPage } from './pages/PricingPage';
 import { ExamplesPage } from './pages/ExamplesPage';
 import { DocsPage } from './pages/DocsPage';
 import { checkApiHealth } from './lib/apiHealth';
+import { ApiDiagnosticsPanel } from './components/ApiDiagnosticsPanel';
 
 function App() {
   const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
@@ -50,6 +48,9 @@ function App() {
           </div>
         </div>
       )}
+
+      <ApiDiagnosticsPanel />
+
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/signin" element={<SignInPage />} />

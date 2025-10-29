@@ -1,13 +1,16 @@
 // src/lib/api.ts
+import { API_URL } from './config';
+import { fetchWithRetry } from './apiWithRetry';
+
 type JSONLike = Record<string, any>;
 
-const API_URL =
-  (import.meta as any).env?.VITE_API_URL?.replace(/\/$/, '') ||
-  (window as any).__API_URL__?.replace(/\/$/, '') ||
-  '';
+let requestIdCounter = 0;
+function generateRequestId(): string {
+  return `req_${Date.now()}_${++requestIdCounter}`;
+}
 
 function base() {
-  return API_URL || window.location.origin;
+  return API_URL;
 }
 
 class ApiError extends Error {
@@ -69,12 +72,23 @@ function getDetailedErrorMessage(status: number, defaultMsg: string, endpoint: s
 }
 
 async function httpPost<T = JSONLike>(path: string, body: JSONLike): Promise<T> {
+  const requestId = generateRequestId();
+  const startTime = Date.now();
+
   try {
-    console.log(`[API] POST ${path}`, { bodyKeys: Object.keys(body) });
+    console.log(`[API] POST ${path}`, {
+      requestId,
+      bodyKeys: Object.keys(body),
+      apiUrl: base(),
+      fullUrl: `${base()}${path}`
+    });
 
     const res = await fetch(`${base()}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': requestId
+      },
       body: JSON.stringify(body),
     });
 
@@ -91,17 +105,22 @@ async function httpPost<T = JSONLike>(path: string, body: JSONLike): Promise<T> 
       }
 
       const detailedMsg = getDetailedErrorMessage(res.status, errorMsg, path);
+      const duration = Date.now() - startTime;
       console.error(`[API] POST ${path} failed:`, {
+        requestId,
         status: res.status,
         message: detailedMsg,
         details: errorDetails,
+        duration: `${duration}ms`,
+        apiUrl: base()
       });
 
       throw new ApiError(detailedMsg, res.status, path, errorDetails);
     }
 
     const result = (await res.json()) as T;
-    console.log(`[API] POST ${path} succeeded`);
+    const duration = Date.now() - startTime;
+    console.log(`[API] POST ${path} succeeded`, { requestId, duration: `${duration}ms` });
     return result;
   } catch (error) {
     if (error instanceof ApiError) {
@@ -110,7 +129,13 @@ async function httpPost<T = JSONLike>(path: string, body: JSONLike): Promise<T> 
 
     // Network error (fetch failed)
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error(`[API] Network error on POST ${path}:`, error);
+      const duration = Date.now() - startTime;
+      console.error(`[API] Network error on POST ${path}:`, {
+        requestId,
+        error: error.message,
+        duration: `${duration}ms`,
+        apiUrl: base()
+      });
       throw new ApiError(
         'Network error. Unable to reach the server. Please check your connection.',
         0,
@@ -118,7 +143,12 @@ async function httpPost<T = JSONLike>(path: string, body: JSONLike): Promise<T> 
       );
     }
 
-    console.error(`[API] Unexpected error on POST ${path}:`, error);
+    const duration = Date.now() - startTime;
+    console.error(`[API] Unexpected error on POST ${path}:`, {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+      duration: `${duration}ms`
+    });
     throw new ApiError(
       error instanceof Error ? error.message : 'An unexpected error occurred',
       0,
@@ -128,10 +158,21 @@ async function httpPost<T = JSONLike>(path: string, body: JSONLike): Promise<T> 
 }
 
 async function httpGet<T = JSONLike>(path: string): Promise<T> {
-  try {
-    console.log(`[API] GET ${path}`);
+  const requestId = generateRequestId();
+  const startTime = Date.now();
 
-    const res = await fetch(`${base()}${path}`);
+  try {
+    console.log(`[API] GET ${path}`, {
+      requestId,
+      apiUrl: base(),
+      fullUrl: `${base()}${path}`
+    });
+
+    const res = await fetch(`${base()}${path}`, {
+      headers: {
+        'X-Request-ID': requestId
+      }
+    });
 
     if (!res.ok) {
       let errorMsg = `HTTP ${res.status}`;
@@ -146,17 +187,22 @@ async function httpGet<T = JSONLike>(path: string): Promise<T> {
       }
 
       const detailedMsg = getDetailedErrorMessage(res.status, errorMsg, path);
+      const duration = Date.now() - startTime;
       console.error(`[API] GET ${path} failed:`, {
+        requestId,
         status: res.status,
         message: detailedMsg,
         details: errorDetails,
+        duration: `${duration}ms`,
+        apiUrl: base()
       });
 
       throw new ApiError(detailedMsg, res.status, path, errorDetails);
     }
 
     const result = (await res.json()) as T;
-    console.log(`[API] GET ${path} succeeded`);
+    const duration = Date.now() - startTime;
+    console.log(`[API] GET ${path} succeeded`, { requestId, duration: `${duration}ms` });
     return result;
   } catch (error) {
     if (error instanceof ApiError) {
@@ -165,7 +211,13 @@ async function httpGet<T = JSONLike>(path: string): Promise<T> {
 
     // Network error (fetch failed)
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error(`[API] Network error on GET ${path}:`, error);
+      const duration = Date.now() - startTime;
+      console.error(`[API] Network error on GET ${path}:`, {
+        requestId,
+        error: error.message,
+        duration: `${duration}ms`,
+        apiUrl: base()
+      });
       throw new ApiError(
         'Network error. Unable to reach the server. Please check your connection.',
         0,
@@ -173,7 +225,12 @@ async function httpGet<T = JSONLike>(path: string): Promise<T> {
       );
     }
 
-    console.error(`[API] Unexpected error on GET ${path}:`, error);
+    const duration = Date.now() - startTime;
+    console.error(`[API] Unexpected error on GET ${path}:`, {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+      duration: `${duration}ms`
+    });
     throw new ApiError(
       error instanceof Error ? error.message : 'An unexpected error occurred',
       0,
@@ -184,22 +241,38 @@ async function httpGet<T = JSONLike>(path: string): Promise<T> {
 
 /** POST /api/ingest/url { url, userId } -> { projectId, productData, ... } */
 export async function ingest(payload: { url: string; userId: string }) {
-  return httpPost('/api/ingest/url', payload);
+  return fetchWithRetry(
+    () => httpPost('/api/ingest/url', payload),
+    'Ingest URL',
+    { maxRetries: 2 }
+  );
 }
 
 /** POST /api/plan { projectId, ... } -> { variants, projectId, ... } */
 export async function plan(body: JSONLike) {
-  return httpPost('/api/plan', body);
+  return fetchWithRetry(
+    () => httpPost('/api/plan', body),
+    'Generate Plan',
+    { maxRetries: 2 }
+  );
 }
 
 /** POST /api/render/previews { projectId, userId } -> { runs: [...] } */
 export async function renderPreviews(payload: { projectId: string; userId: string }) {
-  return httpPost('/api/render/previews', payload);
+  return fetchWithRetry(
+    () => httpPost('/api/render/previews', payload),
+    'Render Previews',
+    { maxRetries: 2 }
+  );
 }
 
 /** (optional) POST /api/render/finals { projectId, userId } */
 export async function renderFinals(payload: { projectId: string; userId: string }) {
-  return httpPost('/api/render/finals', payload);
+  return fetchWithRetry(
+    () => httpPost('/api/render/finals', payload),
+    'Render Finals',
+    { maxRetries: 2 }
+  );
 }
 
 /** GET /api/render/status/:runId -> { id, state, videoUrl?, error? } */

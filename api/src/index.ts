@@ -16,6 +16,7 @@ import hooksRouter from './routes/hooks';
 import staticRouter from './routes/static';
 import frameworksRouter from './routes/frameworks';
 import beatsRouter from './routes/beats';
+import diagnosticsRouter from './routes/diagnostics';
 
 // health endpoint
 import { healthHandler } from './routes/health';
@@ -122,6 +123,7 @@ app.get('/api/health', healthHandler);
 app.get('/healthz', healthHandler); // alias for old frontends/tools
 
 /** Mount API routers (each router defines its own /api/... paths) */
+app.use(diagnosticsRouter);
 app.use(ingestRouter);
 app.use(planRouter);
 app.use(renderRouter);
